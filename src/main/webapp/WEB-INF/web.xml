@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<web-app xmlns="http://xmlns.jcp.org/xml/ns/javaee" version="4.0">
+    <servlet>
+        <servlet-name>FrontServlet</servlet-name>
+        <servlet-class>com.itu.demo.FrontServlet</servlet-class>
+        <init-param>
+            <param-name>controller-package</param-name>
+            <param-value>com.backoffice.controller</param-value>
+        </init-param>
+    </servlet>
+    <servlet-mapping>
+        <servlet-name>FrontServlet</servlet-name>
+        <url-pattern>/</url-pattern>
+    </servlet-mapping>
+</web-app>
