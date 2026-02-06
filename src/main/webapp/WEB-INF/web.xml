@@ -12,4 +12,13 @@
         <servlet-name>FrontServlet</servlet-name>
         <url-pattern>/</url-pattern>
     </servlet-mapping>
+
+    <servlet>
+        <servlet-name>ReservationApiServlet</servlet-name>
+        <servlet-class>com.backoffice.api.ReservationApiServlet</servlet-class>
+    </servlet>
+    <servlet-mapping>
+        <servlet-name>ReservationApiServlet</servlet-name>
+        <url-pattern>/api/reservations</url-pattern>
+    </servlet-mapping>
 </web-app>

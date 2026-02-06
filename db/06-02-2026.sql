@@ -6,7 +6,8 @@
 --     nom VARCHAR(100) NOT NULL,
 --     prenom VARCHAR(100)
 -- );
-
+CREATE DATABASE backoffice;
+\c backoffice;
 -- =========================
 -- TABLE HOTEL
 -- =========================
@@ -47,6 +48,20 @@ CREATE TABLE reservation (
     CONSTRAINT fk_hotel FOREIGN KEY (id_hotel) REFERENCES hotel(id_hotel)
 );
 
+
+-- =========================
+-- INSERTION HOTEL
+-- =========================
+INSERT INTO hotel (nom) VALUES ('Hotel Carlton');
+INSERT INTO hotel (nom) VALUES ('Hotel Colbert');
+INSERT INTO hotel (nom) VALUES ('Hotel Ibis');
+INSERT INTO hotel (nom) VALUES ('Hotel du Louvre');
+INSERT INTO hotel (nom) VALUES ('Hotel Sakamanga');
+INSERT INTO hotel (nom) VALUES ('Hotel Panorama');
+INSERT INTO hotel (nom) VALUES ('Hotel Le Pavillon');
+INSERT INTO hotel (nom) VALUES ('Hotel Radisson Blu');
+INSERT INTO hotel (nom) VALUES ('Hotel Tamboho');
+INSERT INTO hotel (nom) VALUES ('Hotel Restaurant Mellis');
 
 -- sprint1 
 -- backoffice
