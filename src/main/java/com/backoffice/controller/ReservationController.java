@@ -17,6 +17,7 @@ import java.util.List;
 @Controller
 public class ReservationController {
 
+    // Formulaire de reservation (GET)
     @GetMapping("/reservation")
     public ModelView formulaireReservation() {
         ModelView mv = new ModelView("reservation.jsp");
@@ -31,6 +32,7 @@ public class ReservationController {
         return mv;
     }
 
+    // Insertion de reservation (POST)
     @PostMapping("/reservation/insert")
     public ModelView insertReservation(@RequestParam("client") String client,
                                        @RequestParam("nombre_passager") String nombrePassagerStr,
