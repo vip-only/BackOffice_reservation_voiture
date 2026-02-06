@@ -72,3 +72,19 @@ INSERT INTO hotel (nom) VALUES ('Hotel Restaurant Mellis');
 -- frontoffice 
 -- liste reservation afaka anaovana recherche par date filter 
 -- li id hotel avadika en nom hotel
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+backoffice vraiii
