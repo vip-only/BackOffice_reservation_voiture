@@ -6,7 +6,8 @@
 --     nom VARCHAR(100) NOT NULL,
 --     prenom VARCHAR(100)
 -- );
-
+CREATE DATABASE backoffice;
+\c backoffice;
 -- =========================
 -- TABLE HOTEL
 -- =========================
