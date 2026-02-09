@@ -52,16 +52,11 @@ CREATE TABLE reservation (
 -- =========================
 -- INSERTION HOTEL
 -- =========================
-INSERT INTO hotel (nom) VALUES ('Hotel Carlton');
-INSERT INTO hotel (nom) VALUES ('Hotel Colbert');
-INSERT INTO hotel (nom) VALUES ('Hotel Ibis');
-INSERT INTO hotel (nom) VALUES ('Hotel du Louvre');
-INSERT INTO hotel (nom) VALUES ('Hotel Sakamanga');
-INSERT INTO hotel (nom) VALUES ('Hotel Panorama');
-INSERT INTO hotel (nom) VALUES ('Hotel Le Pavillon');
-INSERT INTO hotel (nom) VALUES ('Hotel Radisson Blu');
-INSERT INTO hotel (nom) VALUES ('Hotel Tamboho');
-INSERT INTO hotel (nom) VALUES ('Hotel Restaurant Mellis');
+INSERT INTO hotel (nom) VALUES ('Colbert');
+INSERT INTO hotel (nom) VALUES ('Novotel');
+INSERT INTO hotel (nom) VALUES ('Ibis');
+INSERT INTO hotel (nom) VALUES ('Lokanga');
+
 
 -- sprint1 
 -- backoffice
