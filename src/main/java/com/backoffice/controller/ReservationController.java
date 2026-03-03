@@ -44,6 +44,7 @@ public class ReservationController {
             int idHotel = Integer.parseInt(idHotelStr);
             Timestamp dateHeureArrivee = Timestamp.valueOf(dateHeureStr.replace("T", " ") + ":00");
 
+            // Création sans véhicule assigné
             Reservation reservation = new Reservation(client, nombrePassager, dateHeureArrivee, idHotel);
 
             ReservationDAO reservationDAO = new ReservationDAO();

@@ -31,3 +31,5 @@
 - Pour `distance.from` / `distance.to` : utiliser `aeroport.id` (int) ou `code` (string) ? Décider pour normalisation et simplicité des jointures.
 - Paramètres stockés en `parametre` : utiliser clé unique (ex: `TA`, `VITESSE_MOYENNE`) et colonne `valeur` (string/number).
 - Prévoir index sur les colonnes utilisées pour filtrer par date et jointures (reservation.date, aeroport.code/id).
+
+
