@@ -8,9 +8,11 @@ public class Reservation {
     private int nombrePassager;
     private Timestamp dateHeureArrivee;
     private int idHotel;
+    private Integer idVehicule; // Nullable car pas toujours assigné
 
     // Pour l'affichage
     private String nomHotel;
+    private String referenceVehicule;
 
     public Reservation() {}
 
@@ -19,6 +21,14 @@ public class Reservation {
         this.nombrePassager = nombrePassager;
         this.dateHeureArrivee = dateHeureArrivee;
         this.idHotel = idHotel;
+    }
+
+    public Reservation(String client, int nombrePassager, Timestamp dateHeureArrivee, int idHotel, Integer idVehicule) {
+        this.client = client;
+        this.nombrePassager = nombrePassager;
+        this.dateHeureArrivee = dateHeureArrivee;
+        this.idHotel = idHotel;
+        this.idVehicule = idVehicule;
     }
 
     public int getId() {
@@ -61,11 +71,32 @@ public class Reservation {
         this.idHotel = idHotel;
     }
 
+    public Integer getIdVehicule() {
+        return idVehicule;
+    }
+
+    public void setIdVehicule(Integer idVehicule) {
+        this.idVehicule = idVehicule;
+    }
+
     public String getNomHotel() {
         return nomHotel;
     }
 
     public void setNomHotel(String nomHotel) {
         this.nomHotel = nomHotel;
+    }
+
+    public String getReferenceVehicule() {
+        return referenceVehicule;
+    }
+
+    public void setReferenceVehicule(String referenceVehicule) {
+        this.referenceVehicule = referenceVehicule;
+    }
+
+    // Méthode utilitaire pour vérifier si un véhicule est assigné
+    public boolean hasVehicule() {
+        return idVehicule != null;
     }
 }

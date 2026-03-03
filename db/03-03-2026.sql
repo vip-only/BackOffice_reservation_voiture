@@ -74,8 +74,8 @@ VALUES ('TNR', 'Antananarivo - Ivato');
 
 
 INSERT INTO parametre (cle, valeur) VALUES
-('TA', '45'),                -- Temps d'attente   -- en minutes
-('VITESSE_MOYENNE', '800');  -- en km/h
+('TA', '30'),                -- Temps d'attente   -- en minutes
+('VITESSE_MOYENNE', '30');  -- en km/h
 
 
 
