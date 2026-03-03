@@ -19,6 +19,7 @@
   - Pas d'interface, juste le code pour compléter dans la base
 - [ ] Création du modèle `Token`
 - [ ] Création du DAO `TokenDAO` (insert, findByToken, vérification expiration)
+- [ ] Création du token dans main
 - [ ] Appel API (exemple list reservation) → envoi du token, avant de lister les réservations, vérifier l'existence du token → gestion exception
 
 ---
