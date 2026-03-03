@@ -17,9 +17,12 @@ _ ajout de table distance: id, from, to, kilometer (atao id ve sa atao string??)
 _ préparation de script d'réinitialisation 
 
  BackOffice: interface qui prend un parametre date --> page planification: voiture associé à une réservation départ et retour à telle heure pour cette meme personne; la voiture départ et toujours retour sur l'aeroport
-
+ et en dessous la liste des réservation qui n'ont pas pu etre assigné à un véhicule
  Règle:
  - 1. voiture de capacité sup ou égal au nb de pers
  - 2. on assigne la place la plus proche de la capacité
  - 3. on assigne la voiture Diesel si choix dispo apres la regle 2
+
+
+ liste reservation sans vehicule
 
