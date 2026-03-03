@@ -56,3 +56,26 @@ CREATE TABLE reservation (
     CONSTRAINT fk_hotel FOREIGN KEY (id_hotel) REFERENCES hotel(id_hotel),
     CONSTRAINT fk_vehicule FOREIGN KEY (id_vehicule) REFERENCES vehicule(id)
 );
+
+INSERT INTO vehicule (reference, nombre_place, type_carburant) VALUES
+('VH-001', 4, 'ES'),
+('VH-002', 7, 'D'),
+('VH-003', 12, 'D'),
+('VH-004', 15, 'D'),
+('VH-005', 5, 'ES'),
+('VH-006', 9, 'D'),
+('VH-007', 20, 'D'),
+('VH-008', 30, 'D'),
+('VH-009', 8, 'ES'),
+('VH-010', 14, 'D');
+
+INSERT INTO aeroport (code, libelle)
+VALUES ('TNR', 'Antananarivo - Ivato');
+
+
+INSERT INTO parametre (cle, valeur) VALUES
+('TA', '45'),                -- Temps d'attente   -- en minutes
+('VITESSE_MOYENNE', '800');  -- en km/h
+
+
+
