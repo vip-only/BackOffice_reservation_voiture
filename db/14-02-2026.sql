@@ -27,3 +27,7 @@ INSERT INTO vehicule (reference, nombre_place, type_carburant) VALUES ('VH-003',
 INSERT INTO vehicule (reference, nombre_place, type_carburant) VALUES ('VH-004', 2, 'EL');
 INSERT INTO vehicule (reference, nombre_place, type_carburant) VALUES ('VH-005', 5, 'ES');
 INSERT INTO vehicule (reference, nombre_place, type_carburant) VALUES ('VH-006', 8, 'D');
+
+
+
+metyy
