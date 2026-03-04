@@ -10,8 +10,6 @@ import com.backoffice.dao.HotelDAO;
 import com.backoffice.dao.ReservationDAO;
 import com.backoffice.model.Hotel;
 import com.backoffice.model.Reservation;
-import com.backoffice.model.Vehicule;
-import com.backoffice.service.ReservationService;
 
 import java.sql.Timestamp;
 import java.util.List;
@@ -47,21 +45,14 @@ public class ReservationController {
             // ci-dessous arrive du vol
             Timestamp dateHeureArrivee = Timestamp.valueOf(dateHeureStr.replace("T", " ") + ":00");
             
-            // Création de la réservation sans véhicule assigné
+            // Création de la réservation SANS véhicule assigné
+            // L'assignation se fait via la page de planification
             Reservation reservation = new Reservation(client, nombrePassager, dateHeureArrivee, idHotel);
 
             ReservationDAO reservationDAO = new ReservationDAO();
             reservationDAO.insert(reservation);
 
-            // Assignation automatique du véhicule
-            ReservationService reservationService = new ReservationService();
-            Vehicule vehiculeAssigne = reservationService.assignerVehiculeAuto(reservation);
-
-            if (vehiculeAssigne != null) {
-                mv.addData("success", "Reservation inseree avec succes ! Vehicule assigne: " + vehiculeAssigne.getReference());
-            } else {
-                mv.addData("success", "Reservation inseree avec succes ! Aucun vehicule disponible pour le moment.");
-            }
+            mv.addData("success", "Reservation inseree avec succes ! Allez sur la page Planification pour assigner un vehicule.");
         } catch (Exception e) {
             mv.addData("error", "Erreur lors de l'insertion : " + e.getMessage());
             e.printStackTrace();

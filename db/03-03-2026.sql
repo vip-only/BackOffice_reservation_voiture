@@ -3,7 +3,7 @@
 -- =========================================
 
 DROP TABLE IF EXISTS distance CASCADE;
-DROP TABLE IF EXISTS aeroport CASCADE;
+DROP TABLE IF EXISTS lieu CASCADE;
 DROP TABLE IF EXISTS parametre CASCADE;
 
 
@@ -20,10 +20,10 @@ CREATE TABLE parametre (
 
 
 -- =========================================
--- TABLE AEROPORT
+-- TABLE LIEU
 -- =========================================
 
-CREATE TABLE aeroport (
+CREATE TABLE lieu (
     id SERIAL PRIMARY KEY,
     code VARCHAR(10) UNIQUE NOT NULL,
     libelle VARCHAR(150) NOT NULL
@@ -69,7 +69,7 @@ INSERT INTO vehicule (reference, nombre_place, type_carburant) VALUES
 ('VH-009', 8, 'ES'),
 ('VH-010', 14, 'D');
 
-INSERT INTO aeroport (code, libelle)
+INSERT INTO lieu (code, libelle)
 VALUES ('TNR', 'Antananarivo - Ivato');
 
 
