@@ -10,7 +10,7 @@
 DROP VIEW IF EXISTS v_historique_assignation CASCADE;
 DROP TABLE IF EXISTS reservation CASCADE;
 DROP TABLE IF EXISTS distance CASCADE;
-DROP TABLE IF EXISTS aeroport CASCADE;
+DROP TABLE IF EXISTS lieu CASCADE;
 DROP TABLE IF EXISTS parametre CASCADE;
 DROP TABLE IF EXISTS vehicule CASCADE;
 DROP TABLE IF EXISTS hotel CASCADE;
@@ -43,8 +43,8 @@ CREATE TABLE parametre (
     unite VARCHAR(50)
 );
 
--- TABLE AEROPORT
-CREATE TABLE aeroport (
+-- TABLE LIEU
+CREATE TABLE lieu (
     id SERIAL PRIMARY KEY,
     code VARCHAR(10) UNIQUE NOT NULL,
     libelle VARCHAR(150) NOT NULL
@@ -92,8 +92,8 @@ INSERT INTO hotel (nom) VALUES
     ('Ibis'),
     ('Lokanga');
 
--- Aéroport
-INSERT INTO aeroport (code, libelle) VALUES 
+-- Lieux (aéroports, gares, etc.)
+INSERT INTO lieu (code, libelle) VALUES 
     ('TNR', 'Antananarivo - Ivato');
 
 -- Paramètres

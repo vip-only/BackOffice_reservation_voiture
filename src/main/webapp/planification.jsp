@@ -186,12 +186,12 @@
                 <button type="submit" class="btn btn-primary">Afficher</button>
             </form>
             
-            <%-- <% if (request.getAttribute("dateSelectionnee") != null) { %>
+            <% if (request.getAttribute("dateSelectionnee") != null) { %>
             <form action="/planification/assigner" method="POST" style="display:inline;">
                 <input type="hidden" name="date" value="<%= request.getAttribute("dateSelectionnee") %>">
                 <button type="submit" class="btn btn-success">Assigner automatiquement</button>
             </form>
-            <% } %> --%>
+            <% } %>
         </div>
 
         <div class="info-box">

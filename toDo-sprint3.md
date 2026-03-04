@@ -2,7 +2,7 @@
 
 ### Fonctionnalités
 - [ ] Ajout de la table `parametre` (ex: TA (temps d'attente): 30min, Vitessemoyenne: 30) — insertion uniquement, pas de CRUD
-- [ ] Ajout de la table `aeroport` : id, code, libelle
+- [ ] Ajout de la table `lieu` : id, code, libelle
 - [ ] Ajout de la table `distance` : id, from, to, kilometer (décider si `from`/`to` sont des ids ou des strings)
 - [ ] Préparer script de réinitialisation de la base (drop/create + insert données de référence)
 - [ ] BackOffice : page de planification qui prend un paramètre date — URL : `/planification?date=YYYY-MM-DD`
@@ -13,7 +13,7 @@
 ### Scripts SQL
 - [ ] Script de création des tables : `db/script-sprint3.sql`
   - création `parametre` (clé, valeur, unité)
-  - création `aeroport` (id, code, libelle)
+  - création `lieu` (id, code, libelle)
   - création `distance` (id, from, to, kilometer) — préciser type des champs from/to
 - [ ] Script d'insertion des paramètres par défaut : `db/script-sprint3.sql`
 - [ ] Script de réinitialisation : `db/reset-db-sprint3.sql`
@@ -28,8 +28,9 @@
 3. Si plusieurs voitures respectent la règle 2, préférer une voiture Diesel si disponible. 
 
 ### Notes / Décisions à prendre
-- Pour `distance.from` / `distance.to` : utiliser `aeroport.id` (int) ou `code` (string) ? Décider pour normalisation et simplicité des jointures.
+- Pour `distance.from` / `distance.to` : utiliser `lieu.id` (int) ou `code` (string) ? Décider pour normalisation et simplicité des jointures.
 - Paramètres stockés en `parametre` : utiliser clé unique (ex: `TA`, `VITESSE_MOYENNE`) et colonne `valeur` (string/number).
-- Prévoir index sur les colonnes utilisées pour filtrer par date et jointures (reservation.date, aeroport.code/id).
+- Prévoir index sur les colonnes utilisées pour filtrer par date et jointures (reservation.date, lieu.code/id).
 
 
+-assigner par ordre de passager le plus grand

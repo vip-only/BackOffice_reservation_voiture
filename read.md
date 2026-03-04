@@ -12,7 +12,7 @@ sprint 3:
 _ ajout de table parametre(
     ex: TA (temps d'attente):30min, Vitessemoyennne:30
     ) pas de crud jsute insertion
-_ ajout de table aeroport: id, code, libelle
+_ ajout de table lieu: id, code, libelle
 _ ajout de table distance: id, from, to, kilometer (atao id ve sa atao string??)
 _ préparation de script d'réinitialisation 
 
