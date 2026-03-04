@@ -63,6 +63,9 @@ public class VehiculeDAO {
         }
         return vehicules;
     }
+    // public List<Vehicule> findPlaceRestantes(Vehicule v)throws SQLException{
+    //     List<Reservation>reservations = new ReservationDAO().findByVehiculeId(v.getId());
+    // }
 
     // FIND BY ID
     public Vehicule findById(int id) throws SQLException {

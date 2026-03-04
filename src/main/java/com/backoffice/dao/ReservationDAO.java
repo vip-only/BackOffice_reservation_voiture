@@ -90,7 +90,18 @@ public class ReservationDAO {
         }
         return reservations;
     }
+    // public List<Reservation> findByVehiculeId(int vehiculeId) throws SQLException {
+    //     List<Reservation> reservations = new ArrayList<>();
+    //     String sql = "SELECT r.id, r.client, r.nombre_passager, r.date_heure_arrivee, r.id_hotel, r.id_vehicule, " +
+    //                  "h.nom AS nom_hotel, v.reference AS reference_vehicule " +
+    //                  "FROM reservation r " +
+    //                  "JOIN hotel h ON r.id_hotel = h.id_hotel " +
+    //                  "LEFT JOIN vehicule v ON r.id_vehicule = v.id " +
+    //                  "WHERE r.id_vehicule = ? " +
+    //                  "ORDER BY r.date_heure_arrivee DESC";
 
+    //     return reservation;
+    // }
     // FIND BY ID
     public Reservation findById(int id) throws SQLException {
         String sql = "SELECT r.id, r.client, r.nombre_passager, r.date_heure_arrivee, r.id_hotel, r.id_vehicule, " +
