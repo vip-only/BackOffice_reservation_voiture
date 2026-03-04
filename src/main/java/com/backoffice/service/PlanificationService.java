@@ -1,7 +1,12 @@
 package com.backoffice.service;
 
+import com.backoffice.dao.DistanceDAO;
+import com.backoffice.dao.ParametreDAO;
 import com.backoffice.dao.ReservationDAO;
+import com.backoffice.dao.VehiculeDAO;
 import com.backoffice.database.DBConnection;
+import com.backoffice.model.GroupeVehicule;
+import com.backoffice.model.GroupeVehicule.EtapeItineraire;
 import com.backoffice.model.PlanificationReservation;
 import com.backoffice.model.Reservation;
 import com.backoffice.model.Vehicule;
@@ -13,6 +18,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -25,6 +31,9 @@ public class PlanificationService {
     private ReservationDAO reservationDAO = new ReservationDAO();
     private ReservationService reservationService = new ReservationService();
     private VehiculeAffectationService affectationService = new VehiculeAffectationService();
+    private DistanceDAO distanceDAO = new DistanceDAO();
+    private ParametreDAO parametreDAO = new ParametreDAO();
+    private VehiculeDAO vehiculeDAO = new VehiculeDAO();
     
     /**
      * Récupère les planifications pour une date donnée.
@@ -267,6 +276,7 @@ public class PlanificationService {
     /**
      * Calcule l'ordre de dépose selon l'heuristique du plus proche voisin (nearest-neighbour).
      * Part de TNR, va au plus proche, puis au suivant le plus proche, etc.
+     * Utilise les vraies distances inter-hôtels via DistanceDAO.
      */
     private List<Reservation> calculerOrdreDepose(List<Reservation> groupe) throws SQLException {
         if (groupe == null || groupe.isEmpty()) {
@@ -276,40 +286,27 @@ public class PlanificationService {
             return new ArrayList<>(groupe);
         }
         
-        // Récupérer les distances depuis TNR
-        Map<Integer, Double> distancesTNR = getDistancesHotels(groupe);
-        
-        // Pour nearest-neighbour, on a besoin des distances inter-hôtels
-        // Simplification: on utilise les distances depuis TNR comme approximation
-        // (en réalité, il faudrait une matrice de distances entre tous les hôtels)
-        
         List<Reservation> ordreDepose = new ArrayList<>();
         List<Reservation> restants = new ArrayList<>(groupe);
-        
-        // Point de départ: TNR (distance 0)
-        double positionActuelle = 0;
-        int hotelActuel = -1; // Représente TNR
+        int idLieuActuel = -1; // -1 = TNR
         
         while (!restants.isEmpty()) {
-            // Trouver la réservation dont l'hôtel est le plus proche de la position actuelle
             Reservation plusProche = null;
             double distanceMinimale = Double.MAX_VALUE;
             
             for (Reservation r : restants) {
-                double distanceHotel = distancesTNR.getOrDefault(r.getIdHotel(), Double.MAX_VALUE);
-                
-                // Si on est à TNR (hotelActuel = -1), on prend la distance directe
-                // Sinon, on approxime par |distance(hotel) - distance(actuel)|
-                double distanceDepuisActuel;
-                if (hotelActuel == -1) {
-                    distanceDepuisActuel = distanceHotel;
+                double dist;
+                if (idLieuActuel == -1) {
+                    // Depuis TNR
+                    dist = distanceDAO.getDistanceFromTNR(r.getIdHotel());
                 } else {
-                    double distanceActuelle = distancesTNR.getOrDefault(hotelActuel, 0.0);
-                    distanceDepuisActuel = Math.abs(distanceHotel - distanceActuelle);
+                    // D'un hôtel à un autre (vraie distance)
+                    dist = distanceDAO.getDistanceEntreHotels(idLieuActuel, r.getIdHotel());
                 }
+                if (dist < 0) dist = 999; // fallback
                 
-                if (distanceDepuisActuel < distanceMinimale) {
-                    distanceMinimale = distanceDepuisActuel;
+                if (dist < distanceMinimale) {
+                    distanceMinimale = dist;
                     plusProche = r;
                 }
             }
@@ -317,10 +314,244 @@ public class PlanificationService {
             if (plusProche != null) {
                 ordreDepose.add(plusProche);
                 restants.remove(plusProche);
-                hotelActuel = plusProche.getIdHotel();
+                idLieuActuel = plusProche.getIdHotel();
+            } else {
+                ordreDepose.addAll(restants);
+                break;
             }
         }
         
         return ordreDepose;
+    }
+
+    // =====================================================================
+    // CONSTRUCTION DES GROUPES PAR VEHICULE (pour affichage itinéraires)
+    // =====================================================================
+    
+    /**
+     * Construit la liste des GroupeVehicule pour une date donnée.
+     * Regroupe les réservations assignées par véhicule, puis calcule l'itinéraire
+     * optimal (nearest-neighbour) et les horaires de retour pour chaque groupe.
+     * 
+     * Calcul horaires de retour d'un groupe multi-hôtels :
+     *   Départ TNR = date_heure_arrivee
+     *   TNR --(d1/v)--> Hotel1  --(d12/v)--> Hotel2  --(d2_TNR/v)--> TNR
+     *   Heure retour = départ + (d1 + d12 + d2_TNR) / vitesse
+     *   (PAS de temps d'attente pour les regroupements)
+     */
+    public List<GroupeVehicule> construireGroupesParVehicule(Date date) throws SQLException {
+        List<GroupeVehicule> groupes = new ArrayList<>();
+        
+        // 1) Récupérer toutes les réservations assignées pour cette date
+        List<Reservation> reservationsAssignees = reservationDAO.findByDate(date);
+        
+        // Filtrer : garder uniquement celles avec véhicule
+        List<Reservation> avecVehicule = new ArrayList<>();
+        for (Reservation r : reservationsAssignees) {
+            if (r.getIdVehicule() != null) {
+                avecVehicule.add(r);
+            }
+        }
+        
+        if (avecVehicule.isEmpty()) return groupes;
+        
+        // 2) Grouper par id_vehicule
+        Map<Integer, List<Reservation>> parVehicule = new LinkedHashMap<>();
+        for (Reservation r : avecVehicule) {
+            int vid = r.getIdVehicule();
+            if (!parVehicule.containsKey(vid)) {
+                parVehicule.put(vid, new ArrayList<>());
+            }
+            parVehicule.get(vid).add(r);
+        }
+        
+        // 3) Pour chaque véhicule, construire le GroupeVehicule avec itinéraire
+        double vitesseMoyenne = parametreDAO.getVitesseMoyenne(); // km/h
+        
+        for (Map.Entry<Integer, List<Reservation>> entry : parVehicule.entrySet()) {
+            int vehiculeId = entry.getKey();
+            List<Reservation> resasVehicule = entry.getValue();
+            
+            // Charger le véhicule
+            Vehicule vehicule = vehiculeDAO.findById(vehiculeId);
+            if (vehicule == null) continue;
+            
+            GroupeVehicule groupe = new GroupeVehicule(vehicule);
+            groupe.setReservations(resasVehicule);
+            
+            // Total passagers
+            int totalPassagers = 0;
+            for (Reservation r : resasVehicule) {
+                totalPassagers += r.getNombrePassager();
+            }
+            groupe.setTotalPassagers(totalPassagers);
+            
+            // Heure de départ = date_heure_arrivée du vol (on prend la 1ère résa du groupe)
+            Timestamp heureDepart = resasVehicule.get(0).getDateHeureArrivee();
+            groupe.setHeureDepart(heureDepart);
+            
+            // Déterminer l'ordre optimal de visite des hôtels (nearest-neighbour)
+            // et construire l'itinéraire avec les horaires
+            calculerItineraire(groupe, vitesseMoyenne);
+            
+            groupes.add(groupe);
+        }
+        
+        return groupes;
+    }
+    
+    /**
+     * Calcule l'itinéraire d'un GroupeVehicule :
+     *   TNR -> Hotel_1 -> Hotel_2 -> ... -> Hotel_n -> TNR
+     * avec nearest-neighbour pour l'ordre des hôtels.
+     * 
+     * Calcule aussi la distance totale, durée totale et heure de retour.
+     */
+    private void calculerItineraire(GroupeVehicule groupe, double vitesseMoyenne) throws SQLException {
+        List<Reservation> reservations = groupe.getReservations();
+        Timestamp heureDepart = groupe.getHeureDepart();
+        
+        // Collecter les hôtels uniques à visiter et les passagers par hôtel
+        Map<Integer, String> nomHotelParId = new LinkedHashMap<>();
+        Map<Integer, List<String>> passagersParHotel = new LinkedHashMap<>();
+        
+        for (Reservation r : reservations) {
+            int idHotel = r.getIdHotel();
+            nomHotelParId.put(idHotel, r.getNomHotel());
+            if (!passagersParHotel.containsKey(idHotel)) {
+                passagersParHotel.put(idHotel, new ArrayList<>());
+            }
+            passagersParHotel.get(idHotel).add(r.getClient() + " (" + r.getNombrePassager() + " pers.)");
+        }
+        
+        // Ordre optimal via nearest-neighbour
+        List<Integer> hotelsAVisiter = new ArrayList<>(passagersParHotel.keySet());
+        List<Integer> ordreHotels = optimiserOrdreHotels(hotelsAVisiter);
+        
+        // Construire les étapes
+        List<EtapeItineraire> etapes = new ArrayList<>();
+        double distanceTotale = 0;
+        int dureeTotale = 0;
+        long tempsActuelMs = heureDepart.getTime();
+        String lieuActuel = "TNR";
+        int idLieuActuel = -1; // -1 = TNR
+        
+        for (int idHotel : ordreHotels) {
+            // Calculer distance de l'étape
+            double distEtape;
+            if (idLieuActuel == -1) {
+                // Depuis TNR
+                distEtape = distanceDAO.getDistanceFromTNR(idHotel);
+            } else {
+                // D'un hôtel à un autre
+                distEtape = distanceDAO.getDistanceEntreHotels(idLieuActuel, idHotel);
+            }
+            if (distEtape < 0) distEtape = 15; // fallback 15 km
+            
+            // Durée en minutes = distance / vitesse * 60
+            int dureeMinutes = (int) Math.round((distEtape / vitesseMoyenne) * 60);
+            
+            // Heure d'arrivée à cette étape
+            tempsActuelMs += dureeMinutes * 60L * 1000L;
+            Timestamp heureArrivee = new Timestamp(tempsActuelMs);
+            
+            // Créer l'étape
+            String nomArrivee = nomHotelParId.getOrDefault(idHotel, "Hôtel " + idHotel);
+            EtapeItineraire etape = new EtapeItineraire(lieuActuel, nomArrivee, distEtape, dureeMinutes, heureArrivee);
+            etape.setPassagersDeposes(passagersParHotel.getOrDefault(idHotel, new ArrayList<>()));
+            
+            etapes.add(etape);
+            distanceTotale += distEtape;
+            dureeTotale += dureeMinutes;
+            
+            // Avancer
+            lieuActuel = nomArrivee;
+            idLieuActuel = idHotel;
+        }
+        
+        // Dernière étape : retour du dernier hôtel vers TNR
+        double distRetour;
+        if (idLieuActuel >= 0) {
+            distRetour = distanceDAO.getDistanceFromTNR(idLieuActuel);
+        } else {
+            distRetour = 0;
+        }
+        if (distRetour < 0) distRetour = 15;
+        
+        int dureeRetour = (int) Math.round((distRetour / vitesseMoyenne) * 60);
+        tempsActuelMs += dureeRetour * 60L * 1000L;
+        Timestamp heureRetour = new Timestamp(tempsActuelMs);
+        
+        EtapeItineraire etapeRetour = new EtapeItineraire(lieuActuel, "TNR", distRetour, dureeRetour, heureRetour);
+        etapes.add(etapeRetour);
+        
+        distanceTotale += distRetour;
+        dureeTotale += dureeRetour;
+        
+        // Affecter au groupe
+        groupe.setItineraire(etapes);
+        groupe.setDistanceTotaleKm(distanceTotale);
+        groupe.setDureeTotaleMinutes(dureeTotale);
+        groupe.setHeureRetour(heureRetour);
+    }
+    
+    /**
+     * Optimise l'ordre de visite des hôtels avec l'heuristique nearest-neighbour.
+     * Départ = TNR, à chaque étape on choisit l'hôtel non visité le plus proche.
+     */
+    private List<Integer> optimiserOrdreHotels(List<Integer> hotelsAVisiter) throws SQLException {
+        if (hotelsAVisiter.size() <= 1) return new ArrayList<>(hotelsAVisiter);
+        
+        List<Integer> ordre = new ArrayList<>();
+        List<Integer> restants = new ArrayList<>(hotelsAVisiter);
+        int idLieuActuel = -1; // -1 = TNR
+        
+        while (!restants.isEmpty()) {
+            int plusProche = -1;
+            double distMin = Double.MAX_VALUE;
+            
+            for (int idHotel : restants) {
+                double dist;
+                if (idLieuActuel == -1) {
+                    // Depuis TNR
+                    dist = distanceDAO.getDistanceFromTNR(idHotel);
+                } else {
+                    dist = distanceDAO.getDistanceEntreHotels(idLieuActuel, idHotel);
+                }
+                if (dist < 0) dist = 999;
+                
+                if (dist < distMin) {
+                    distMin = dist;
+                    plusProche = idHotel;
+                }
+            }
+            
+            if (plusProche >= 0) {
+                ordre.add(plusProche);
+                restants.remove(Integer.valueOf(plusProche));
+                idLieuActuel = plusProche;
+            } else {
+                ordre.addAll(restants);
+                break;
+            }
+        }
+        
+        return ordre;
+    }
+
+    /**
+     * Regroupe et assigne les réservations pour une date (algorithme amélioré).
+     * 1. Récupère les réservations sans véhicule pour la date
+     * 2. Groupe par timestamp (même heure d'arrivée)
+     * 3. Pour chaque groupe, trie par nombre de passagers DESC
+     * 4. Tente de regrouper dans un même véhicule (greedy bin packing)
+     * 5. Retourne les groupes construits après assignation
+     */
+    public List<GroupeVehicule> regrouperEtAssigner(Date date) throws SQLException {
+        // D'abord, assigner avec la logique de regroupement
+        assignerVehiculesAutomatiquement(date);
+        
+        // Puis construire les groupes pour affichage
+        return construireGroupesParVehicule(date);
     }
 }

@@ -104,11 +104,17 @@ INSERT INTO parametre (cle, valeur, unite) VALUES
 -- Distances (TNR vers chaque hôtel)
 -- from_id = 'TNR', to_id = id_hotel (en VARCHAR)
 INSERT INTO distance (from_id, to_id, kilometer) VALUES 
-    ('TNR', '1', 15.0), 
-    -- ('1','2',20)  -- TNR -> Colbert: 15 km  => 30 min aller, 1h aller-retour
+    ('TNR', '1', 15.0),   -- TNR -> Colbert: 15 km  => 30 min aller, 1h aller-retour
     ('TNR', '2', 22.5),   -- TNR -> Novotel: 22.5 km => 45 min aller, 1h30 aller-retour
     ('TNR', '3', 18.0),   -- TNR -> Ibis: 18 km => 36 min aller, 1h12 aller-retour
-    ('TNR', '4', 30.0);   -- TNR -> Lokanga: 30 km => 1h aller, 2h aller-retour
+    ('TNR', '4', 30.0),   -- TNR -> Lokanga: 30 km => 1h aller, 2h aller-retour
+    -- Distances inter-hôtels
+    ('1', '2', 10.0),     -- Colbert -> Novotel: 10 km
+    ('1', '3', 5.0),      -- Colbert -> Ibis: 5 km
+    ('1', '4', 18.0),     -- Colbert -> Lokanga: 18 km
+    ('2', '3', 8.0),      -- Novotel -> Ibis: 8 km
+    ('2', '4', 12.0),     -- Novotel -> Lokanga: 12 km
+    ('3', '4', 14.0);     -- Ibis -> Lokanga: 14 km
 
 -- Véhicules (triés par capacité et type carburant)
 INSERT INTO vehicule (reference, nombre_place, type_carburant) VALUES
@@ -173,10 +179,11 @@ ORDER BY r.date_heure_arrivee;
 --   Total: 7 passagers à 08:00
 --   Attendu: VH-003 (7 places, Diesel) - REGROUPEMENT
 --   Ordre de dépose (nearest-neighbour depuis TNR): 
---     1. Colbert (15km) 
---     2. Ibis (18km) 
---     3. Novotel (22.5km)
---   Retour basé sur Novotel (le plus loin): 22.5/30*60*2 = 90 min => retour 09:30
+--     1. TNR -> Colbert : 15 km = 30 min
+--     2. Colbert -> Ibis : 5 km = 10 min
+--     3. Ibis -> Novotel : 8 km = 16 min
+--     4. Novotel -> TNR : 22.5 km = 45 min
+--   Distance totale: 50.5 km, Durée totale: 101 min => retour 09:41
 --
 -- == TEST PRIORITE PASSAGERS (ordre décroissant) ==
 --
@@ -193,10 +200,10 @@ ORDER BY r.date_heure_arrivee;
 -- == TEST CHEVAUCHEMENT CLASSIQUE ==
 --
 -- Réservation F: 11:30 -> Novotel (22.5km), 5 passagers
---   VH-003 libre (retour 09:30 < 11:30)
+--   VH-003 libre (retour 09:41 < 11:30)
 --   VH-005 occupé (10:00-12:00), 11:30 chevauche
 --   Attendu: VH-003 (7 places, Diesel)
---   Retour: 90 min => 13:00
+--   Itinéraire: TNR->Novotel(22.5km,45min)->TNR(22.5km,45min) = 90 min => retour 13:00
 --
 -- Réservation G: 12:30 -> Ibis (18km), 6 passagers
 --   VH-003 occupé (11:30-13:00), 12:30 chevauche
@@ -210,8 +217,11 @@ ORDER BY r.date_heure_arrivee;
 -- Réservation I: 14:00 -> Lokanga (30km), 2 passagers
 --   Total: 4 passagers à 14:00
 --   Attendu: VH-002 (4 places, Diesel) - REGROUPEMENT parfait
---   Ordre de dépose: 1. Colbert (15km), 2. Lokanga (30km)
---   Retour basé sur Lokanga: 120 min => 16:00
+--   Itinéraire (nearest-neighbour):
+--     1. TNR -> Colbert : 15 km = 30 min
+--     2. Colbert -> Lokanga : 18 km = 36 min
+--     3. Lokanga -> TNR : 30 km = 60 min
+--   Distance totale: 63 km, Durée totale: 126 min => retour 16:06
 
 -- =========================================
 
