@@ -13,6 +13,8 @@ public class Reservation {
     // Pour l'affichage
     private String nomHotel;
     private String referenceVehicule;
+    private String typeCarburant;
+    private int capaciteVehicule;
 
     public Reservation() {}
 
@@ -95,8 +97,36 @@ public class Reservation {
         this.referenceVehicule = referenceVehicule;
     }
 
+    public String getTypeCarburant() {
+        return typeCarburant;
+    }
+
+    public void setTypeCarburant(String typeCarburant) {
+        this.typeCarburant = typeCarburant;
+    }
+
+    public int getCapaciteVehicule() {
+        return capaciteVehicule;
+    }
+
+    public void setCapaciteVehicule(int capaciteVehicule) {
+        this.capaciteVehicule = capaciteVehicule;
+    }
+
     // Méthode utilitaire pour vérifier si un véhicule est assigné
     public boolean hasVehicule() {
         return idVehicule != null;
+    }
+
+    // Méthode utilitaire pour afficher le type de carburant en clair
+    public String getTypeCarburantLibelle() {
+        if (typeCarburant == null) return "";
+        switch (typeCarburant) {
+            case "D": return "Diesel";
+            case "ES": return "Essence";
+            case "H": return "Hybride";
+            case "EL": return "Électrique";
+            default: return typeCarburant;
+        }
     }
 }

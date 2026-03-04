@@ -206,11 +206,12 @@
                     <th>Client</th>
                     <th>Passagers</th>
                     <th>Hôtel</th>
+                    <th>Distance</th>
                     <th>Véhicule</th>
                     <th>Type</th>
                     <th>Départ aéroport</th>
-                    <th>Arrivée hôtel</th>
                     <th>Retour aéroport</th>
+                    <th>Durée totale</th>
                 </tr>
             </thead>
             <tbody>
@@ -221,31 +222,36 @@
                     if (planifications != null && !planifications.isEmpty()) {
                         for (PlanificationReservation p : planifications) {
                             Reservation r = p.getReservation();
+                            String typeCarburant = r.getTypeCarburant();
                             String badgeClass = "";
-                            switch (r.getReferenceVehicule() != null && r.getReferenceVehicule().length() > 0 ? 
-                                    r.getReferenceVehicule().substring(0, 1) : "") {
-                                case "D": badgeClass = "badge-diesel"; break;
-                                case "E": badgeClass = "badge-essence"; break;
-                                case "H": badgeClass = "badge-hybride"; break;
-                                default: badgeClass = "badge-electrique"; break;
+                            String typeLabel = "";
+                            if (typeCarburant != null) {
+                                switch (typeCarburant) {
+                                    case "D": badgeClass = "badge-diesel"; typeLabel = "Diesel"; break;
+                                    case "ES": badgeClass = "badge-essence"; typeLabel = "Essence"; break;
+                                    case "H": badgeClass = "badge-hybride"; typeLabel = "Hybride"; break;
+                                    case "EL": badgeClass = "badge-electrique"; typeLabel = "Électrique"; break;
+                                    default: badgeClass = ""; typeLabel = typeCarburant;
+                                }
                             }
                 %>
                 <tr>
                     <td><%= r.getClient() %></td>
                     <td><%= r.getNombrePassager() %></td>
                     <td><%= r.getNomHotel() %></td>
+                    <td><%= String.format("%.1f", p.getDistanceKm()) %> km</td>
                     <td><%= r.getReferenceVehicule() %></td>
-                    <td><span class="badge <%= badgeClass %>">Capacité <%= r.getNombrePassager() %></span></td>
+                    <td><span class="badge <%= badgeClass %>"><%= typeLabel %></span></td>
                     <td class="time-display"><%= timeFormat.format(p.getHeureDepart()) %></td>
-                    <td class="time-display"><%= timeFormat.format(r.getDateHeureArrivee()) %></td>
                     <td class="time-display"><%= timeFormat.format(p.getHeureRetour()) %></td>
+                    <td><%= p.getDureeTotaleMinutes() %> min</td>
                 </tr>
                 <%
                         }
                     } else {
                 %>
                 <tr>
-                    <td colspan="8" class="empty-state">Aucune réservation planifiée pour cette date</td>
+                    <td colspan="9" class="empty-state">Aucune réservation planifiée pour cette date</td>
                 </tr>
                 <%
                     }
