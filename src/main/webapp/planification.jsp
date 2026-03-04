@@ -185,7 +185,6 @@
                        required>
                 <button type="submit" class="btn btn-primary">Afficher</button>
             </form>
-            
             <% if (request.getAttribute("dateSelectionnee") != null) { %>
             <form action="/planification/assigner" method="POST" style="display:inline;">
                 <input type="hidden" name="date" value="<%= request.getAttribute("dateSelectionnee") %>">
@@ -209,14 +208,14 @@
                     <th>Distance</th>
                     <th>Véhicule</th>
                     <th>Type</th>
-                    <th>Départ aéroport</th>
-                    <th>Retour aéroport</th>
+                    <th>Date/Heure départ</th>
+                    <th>Date/Heure retour</th>
                     <th>Durée totale</th>
                 </tr>
             </thead>
             <tbody>
                 <%
-                    SimpleDateFormat timeFormat = new SimpleDateFormat("HH:mm");
+                    SimpleDateFormat dateTimeFormat = new SimpleDateFormat("dd/MM/yyyy HH:mm");
                     List<PlanificationReservation> planifications = (List<PlanificationReservation>) request.getAttribute("planifications");
                     
                     if (planifications != null && !planifications.isEmpty()) {
@@ -242,8 +241,8 @@
                     <td><%= String.format("%.1f", p.getDistanceKm()) %> km</td>
                     <td><%= r.getReferenceVehicule() %></td>
                     <td><span class="badge <%= badgeClass %>"><%= typeLabel %></span></td>
-                    <td class="time-display"><%= timeFormat.format(p.getHeureDepart()) %></td>
-                    <td class="time-display"><%= timeFormat.format(p.getHeureRetour()) %></td>
+                    <td class="time-display"><%= dateTimeFormat.format(p.getHeureDepart()) %></td>
+                    <td class="time-display"><%= dateTimeFormat.format(p.getHeureRetour()) %></td>
                     <td><%= p.getDureeTotaleMinutes() %> min</td>
                 </tr>
                 <%
@@ -268,11 +267,12 @@
                     <th>Client</th>
                     <th>Passagers</th>
                     <th>Hôtel</th>
-                    <th>Heure d'arrivée</th>
+                    <th>Date/Heure d'arrivée</th>
                 </tr>
             </thead>
             <tbody>
                 <%
+                    SimpleDateFormat dateTimeFormat2 = new SimpleDateFormat("dd/MM/yyyy HH:mm");
                     List<Reservation> reservationsSansVehicule = (List<Reservation>) request.getAttribute("reservationsSansVehicule");
                     
                     if (reservationsSansVehicule != null && !reservationsSansVehicule.isEmpty()) {
@@ -283,7 +283,7 @@
                     <td><%= r.getClient() %></td>
                     <td><%= r.getNombrePassager() %></td>
                     <td><%= r.getNomHotel() %></td>
-                    <td class="time-display"><%= timeFormat.format(r.getDateHeureArrivee()) %></td>
+                    <td class="time-display"><%= dateTimeFormat2.format(r.getDateHeureArrivee()) %></td>
                 </tr>
                 <%
                         }

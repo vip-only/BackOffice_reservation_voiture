@@ -171,7 +171,7 @@ public class ReservationDAO {
         return reservations;
     }
 
-    // FIND RESERVATIONS SANS VEHICULE PAR DATE
+    // FIND RESERVATIONS SANS VEHICULE PAR DATE (triées par nombre de passagers décroissant)
     public List<Reservation> findWithoutVehiculeByDate(java.sql.Date date) throws SQLException {
         List<Reservation> reservations = new ArrayList<>();
         String sql = "SELECT r.id, r.client, r.nombre_passager, r.date_heure_arrivee, r.id_hotel, r.id_vehicule, " +
@@ -179,7 +179,7 @@ public class ReservationDAO {
                      "FROM reservation r " +
                      "JOIN hotel h ON r.id_hotel = h.id_hotel " +
                      "WHERE r.id_vehicule IS NULL AND DATE(r.date_heure_arrivee) = ? " +
-                     "ORDER BY r.date_heure_arrivee";
+                     "ORDER BY r.nombre_passager DESC, r.date_heure_arrivee";
 
         try (Connection conn = DBConnection.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
