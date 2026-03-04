@@ -6,9 +6,19 @@ import com.backoffice.model.PlanificationReservation;
 import com.backoffice.model.Reservation;
 import com.backoffice.model.Vehicule;
 
-import java.sql.*;
+import java.sql.Connection;
+import java.sql.Date;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Timestamp;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 public class PlanificationService {
     
@@ -97,15 +107,220 @@ public class PlanificationService {
     }
     
     /**
-     * Assigner automatiquement les véhicules aux réservations sans véhicule
-     * Utilise le ReservationService qui applique les règles d'affectation correctement
+     * Assigner automatiquement les véhicules aux réservations sans véhicule.
+     * 
+     * NOUVELLES REGLES:
+     * 1. Traiter en priorité les réservations avec le plus de passagers (déjà trié dans DAO)
+     * 2. Regrouper les clients arrivant à la même date/heure dans la même voiture si capacité le permet
+     * 3. Pas de temps d'attente pour le regroupement
+     * 4. Ordre de dépose par distance minimale (nearest-neighbour)
      */
     public void assignerVehiculesAutomatiquement(Date date) throws SQLException {
+        // Récupérer toutes les réservations sans véhicule, triées par nombre de passagers DESC
         List<Reservation> reservationsSansVehicule = reservationDAO.findWithoutVehiculeByDate(date);
         
-        for (Reservation reservation : reservationsSansVehicule) {
-            // Utiliser le service d'assignation automatique
-            reservationService.assignerVehiculeAuto(reservation);
+        if (reservationsSansVehicule == null || reservationsSansVehicule.isEmpty()) {
+            return;
         }
+        
+        // Grouper les réservations par date/heure d'arrivée exacte
+        Map<Timestamp, List<Reservation>> groupesParHeure = new LinkedHashMap<>();
+        for (Reservation r : reservationsSansVehicule) {
+            Timestamp ts = r.getDateHeureArrivee();
+            if (ts != null) {
+                if (!groupesParHeure.containsKey(ts)) {
+                    groupesParHeure.put(ts, new ArrayList<>());
+                }
+                groupesParHeure.get(ts).add(r);
+            }
+        }
+        
+        // Traiter chaque groupe de réservations (même heure d'arrivée)
+        for (Map.Entry<Timestamp, List<Reservation>> entry : groupesParHeure.entrySet()) {
+            Timestamp heureArrivee = entry.getKey();
+            List<Reservation> groupe = entry.getValue();
+            
+            // Le groupe est déjà trié par nombre de passagers DESC (grâce au DAO)
+            assignerGroupeReservations(groupe, heureArrivee);
+        }
+    }
+    
+    /**
+     * Assigne un véhicule à un groupe de réservations arrivant à la même heure.
+     * Essaie de regrouper dans un seul véhicule si la capacité le permet.
+     */
+    private void assignerGroupeReservations(List<Reservation> groupe, Timestamp heureArrivee) throws SQLException {
+        if (groupe.isEmpty()) {
+            return;
+        }
+        
+        // Calculer le total de passagers du groupe
+        int totalPassagers = groupe.stream().mapToInt(Reservation::getNombrePassager).sum();
+        
+        // Trouver l'hôtel le plus éloigné (pour calculer le temps de retour max)
+        int idHotelPlusLoin = trouverHotelPlusLoin(groupe);
+        
+        // Essayer de trouver un véhicule pouvant accueillir tout le groupe
+        List<Vehicule> vehiculesDisponibles = reservationService.getVehiculesDisponibles(heureArrivee, idHotelPlusLoin);
+        Vehicule vehiculeGroupe = affectationService.choisirMeilleurVehicule(vehiculesDisponibles, totalPassagers);
+        
+        if (vehiculeGroupe != null) {
+            // Un seul véhicule peut prendre tout le groupe
+            // Déterminer l'ordre de dépose (nearest-neighbour)
+            List<Reservation> ordreDepose = calculerOrdreDepose(groupe);
+            
+            // Assigner le même véhicule à toutes les réservations du groupe
+            for (Reservation r : ordreDepose) {
+                reservationDAO.assignVehicule(r.getId(), vehiculeGroupe.getId());
+                r.setIdVehicule(vehiculeGroupe.getId());
+            }
+        } else {
+            // Pas assez de capacité pour regrouper, assigner individuellement
+            // (traité par ordre de passagers décroissant)
+            for (Reservation r : groupe) {
+                // Vérifier si déjà assigné (par un groupe précédent)
+                if (r.getIdVehicule() == null) {
+                    reservationService.assignerVehiculeAuto(r);
+                }
+            }
+        }
+    }
+    
+    /**
+     * Trouve l'hôtel le plus éloigné du groupe (pour le calcul du temps de retour).
+     */
+    private int trouverHotelPlusLoin(List<Reservation> groupe) throws SQLException {
+        if (groupe == null || groupe.isEmpty()) {
+            return 1; // Valeur par défaut
+        }
+        if (groupe.size() == 1) {
+            return groupe.get(0).getIdHotel();
+        }
+        
+        // Récupérer les distances pour tous les hôtels du groupe
+        Map<Integer, Double> distances = getDistancesHotels(groupe);
+        
+        if (distances.isEmpty()) {
+            return groupe.get(0).getIdHotel();
+        }
+        
+        // Trouver l'hôtel avec la distance max
+        int hotelPlusLoin = groupe.get(0).getIdHotel();
+        double distanceMax = 0;
+        for (Map.Entry<Integer, Double> entry : distances.entrySet()) {
+            if (entry.getValue() > distanceMax) {
+                distanceMax = entry.getValue();
+                hotelPlusLoin = entry.getKey();
+            }
+        }
+        return hotelPlusLoin;
+    }
+    
+    /**
+     * Récupère les distances depuis TNR pour les hôtels du groupe.
+     */
+    private Map<Integer, Double> getDistancesHotels(List<Reservation> groupe) throws SQLException {
+        Map<Integer, Double> distances = new HashMap<>();
+        
+        if (groupe == null || groupe.isEmpty()) {
+            return distances;
+        }
+        
+        // Récupérer les IDs d'hôtels uniques
+        Set<Integer> hotelIds = new HashSet<>();
+        for (Reservation r : groupe) {
+            hotelIds.add(r.getIdHotel());
+        }
+        
+        if (hotelIds.isEmpty()) {
+            return distances;
+        }
+        
+        // Construire les placeholders
+        StringBuilder placeholders = new StringBuilder();
+        for (int i = 0; i < hotelIds.size(); i++) {
+            if (i > 0) placeholders.append(",");
+            placeholders.append("?");
+        }
+        
+        String sql = "SELECT CAST(to_id AS INTEGER) AS hotel_id, kilometer " +
+                     "FROM distance WHERE from_id = 'TNR' AND to_id IN (" + placeholders.toString() + ")";
+        
+        try (Connection conn = DBConnection.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            
+            int idx = 1;
+            for (Integer hotelId : hotelIds) {
+                ps.setString(idx++, String.valueOf(hotelId));
+            }
+            
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    distances.put(rs.getInt("hotel_id"), rs.getDouble("kilometer"));
+                }
+            }
+        }
+        
+        return distances;
+    }
+    
+    /**
+     * Calcule l'ordre de dépose selon l'heuristique du plus proche voisin (nearest-neighbour).
+     * Part de TNR, va au plus proche, puis au suivant le plus proche, etc.
+     */
+    private List<Reservation> calculerOrdreDepose(List<Reservation> groupe) throws SQLException {
+        if (groupe == null || groupe.isEmpty()) {
+            return new ArrayList<>();
+        }
+        if (groupe.size() == 1) {
+            return new ArrayList<>(groupe);
+        }
+        
+        // Récupérer les distances depuis TNR
+        Map<Integer, Double> distancesTNR = getDistancesHotels(groupe);
+        
+        // Pour nearest-neighbour, on a besoin des distances inter-hôtels
+        // Simplification: on utilise les distances depuis TNR comme approximation
+        // (en réalité, il faudrait une matrice de distances entre tous les hôtels)
+        
+        List<Reservation> ordreDepose = new ArrayList<>();
+        List<Reservation> restants = new ArrayList<>(groupe);
+        
+        // Point de départ: TNR (distance 0)
+        double positionActuelle = 0;
+        int hotelActuel = -1; // Représente TNR
+        
+        while (!restants.isEmpty()) {
+            // Trouver la réservation dont l'hôtel est le plus proche de la position actuelle
+            Reservation plusProche = null;
+            double distanceMinimale = Double.MAX_VALUE;
+            
+            for (Reservation r : restants) {
+                double distanceHotel = distancesTNR.getOrDefault(r.getIdHotel(), Double.MAX_VALUE);
+                
+                // Si on est à TNR (hotelActuel = -1), on prend la distance directe
+                // Sinon, on approxime par |distance(hotel) - distance(actuel)|
+                double distanceDepuisActuel;
+                if (hotelActuel == -1) {
+                    distanceDepuisActuel = distanceHotel;
+                } else {
+                    double distanceActuelle = distancesTNR.getOrDefault(hotelActuel, 0.0);
+                    distanceDepuisActuel = Math.abs(distanceHotel - distanceActuelle);
+                }
+                
+                if (distanceDepuisActuel < distanceMinimale) {
+                    distanceMinimale = distanceDepuisActuel;
+                    plusProche = r;
+                }
+            }
+            
+            if (plusProche != null) {
+                ordreDepose.add(plusProche);
+                restants.remove(plusProche);
+                hotelActuel = plusProche.getIdHotel();
+            }
+        }
+        
+        return ordreDepose;
     }
 }
