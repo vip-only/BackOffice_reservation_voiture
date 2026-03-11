@@ -136,4 +136,28 @@ Ajouter la gestion du **temps d'attente (TA)** pour regrouper les réservations 
 3. **Chevauchement avec TA** → L'heure de départ pour le calcul de chevauchement = MAX(arrivées du groupe).
 4. **Extension future** : TA variable selon type de client ou heure de la journée.
 
+---
 
+### Précision importante : Heure de départ du véhicule
+
+**Règle** : Le véhicule part à l'heure du **dernier vol** dans la fenêtre TA.
+
+**Exemple** (TA = 30 min) :
+```
+Vols : 08h00, 08h15, 08h20
+
+Fenêtre TA : [08h00, 08h30]
+Les 3 vols sont dans la fenêtre → 1 seul groupe
+
+Heure de départ véhicule = MAX(08h00, 08h15, 08h20) = 08h20
+
+┌──────────┬──────────────┬─────────────────┐
+│ Vol      │ Heure arrivée│ Attente client  │
+├──────────┼──────────────┼─────────────────┤
+│ Vol A    │ 08h00        │ 20 min          │
+│ Vol B    │ 08h15        │ 5 min           │
+│ Vol C    │ 08h20        │ 0 min (départ)  │
+└──────────┴──────────────┴─────────────────┘
+
+→ Tous les passagers partent ensemble à 08h20
+``` 
