@@ -57,17 +57,17 @@ Ajouter la gestion du **temps d'attente (TA)** pour regrouper les réservations 
    ```
    Vol A : 08h00  ─┐
    Vol B : 08h15  ─┼─► Groupe 1 (fenêtre 08h00-08h30)
-   Vol C : 08h25  ─┘   → Départ véhicule : 08h25
+   Vol C : 08h25  ─┘   → Départ des véhicules : 08h25
    
    Vol D : 10h00  ─┐
    Vol E : 10h20  ─┼─► Groupe 2 (fenêtre 10h00-10h30)
-                  ─┘   → Départ véhicule : 10h20
+                  ─┘   → Départ des véhicules : 10h20
    
    Vol F : 14h00  ────► Groupe 3 (seul dans la fenêtre)
-                        → Départ véhicule : 14h00
+                        → Départ des véhicules : 14h00
    ```
 
-5. **Règles de base conservées** :
+5. **Règles de base conservées dans chaque regroupement** :
    - R1 : Capacité >= nombre de passagers
    - R2 : Plus petite capacité satisfaisante
    - R3 : Préférence Diesel si égalité de capacité

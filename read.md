@@ -25,6 +25,8 @@ _ préparation de script d'réinitialisation
 
 
  liste reservation sans vehicule
+ 
+
 
 Sprint5 : Temps d attente 
 Afaka atambatra anaty vehicule ray ny reservation maromar
@@ -36,3 +38,18 @@ Heure de depart = miamikina am izay vol farany ndrindra
 Le plus pres
 Diesel , essence 
 random
+
+ 
+sprint 5: temps d'attente = regroupement de reservations
+
+On peut rassembler des reservations d'heures differentes dans une voiture
+Le concept de regroupement sera elargi par le temps d'attente
+Si on a un vol à 8h Ta:30MIN: regroupement 1
+    on a un vol à 8h15 donc toutes les voitures seront de depart à 8h15 suivant le regroupement
+Si on a un vol à 10h TA:30MIN: regroupement 2
+
+
+Le regroupement fonctionne:
+_ on prend le premier vol on regarde si d'autres vols sont dans le TA si oui toutes les voitures ont pour départ l'heure du dernier vol du regroupement
+_ et le prochain vol hors regroupement sera la premiere heure pour le nouveau regroupement et on regarde les vols dans le regroupement 
+
