@@ -195,37 +195,6 @@ public class PlanificationService {
     }
 
     /**
-     * Assigner automatiquement les véhicules aux réservations sans véhicule.
-     * Sprint 5: regroupement par fenêtre TA fixe.
-     */
-    public void assignerVehiculesAutomatiquement(Date date) throws SQLException {
-        List<Reservation> reservationsSansVehicule = reservationDAO.findWithoutVehiculeByDate(date);
-        
-        if (reservationsSansVehicule == null || reservationsSansVehicule.isEmpty()) {
-            return;
-        }
-        
-        int taMinutes = parametreDAO.getTempsAttente();
-        
-        // Trier par date_heure_arrivee croissante (obligatoire pour l'algo de fenêtrage)
-        reservationsSansVehicule.sort((r1, r2) -> r1.getDateHeureArrivee().compareTo(r2.getDateHeureArrivee()));
-        
-        // Construire les fenêtres TA
-        List<List<Reservation>> fenetres = construireFenetresTA(reservationsSansVehicule, taMinutes);
-        
-        // Traiter chaque fenêtre dans l'ordre chronologique
-        for (List<Reservation> groupe : fenetres) {
-            // Trier par passagers DESC dans chaque groupe
-            groupe.sort((r1, r2) -> Integer.compare(r2.getNombrePassager(), r1.getNombrePassager()));
-            
-            // Heure de départ = MAX(date_heure_arrivee) du groupe
-            Timestamp heureDepart = calculerHeureDepart(groupe);
-            
-            assignerGroupeReservations(groupe, heureDepart);
-        }
-    }
-
-    /**
      * Assigne des véhicules à un groupe de réservations.
      * heureDepart = MAX(arrivées du groupe) utilisé pour la vérification de disponibilité.
      */
@@ -317,8 +286,10 @@ public class PlanificationService {
     }
 
     /**
-     * Construit les groupes de réservations par véhicule pour une date donnée.
-     * Corrigé: debutFenetre se remet à jour correctement lors du changement de groupe.
+     * Construit les groupes de réservations pour une date donnée.
+     * Regroupe par fenêtre TA D'ABORD (toutes réservations confondues),
+     * puis par véhicule à l'intérieur de chaque fenêtre.
+     * Tous les véhicules d'une même fenêtre partagent le même heureDepart = MAX(arrivées de la fenêtre).
      */
     public List<GroupeVehicule> construireGroupesParVehicule(Date date) throws SQLException {
         List<GroupeVehicule> groupes = new ArrayList<>();
@@ -332,42 +303,52 @@ public class PlanificationService {
         int taMinutes = parametreDAO.getTempsAttente();
         long taMillis = taMinutes * 60L * 1000L;
         
-        // Grouper par véhicule
-        Map<Integer, List<PlanificationReservation>> parVehicule = new LinkedHashMap<>();
+        // Trier TOUTES les planifications par date_heure_arrivee
+        planifications.sort((a, b) -> a.getReservation().getDateHeureArrivee()
+            .compareTo(b.getReservation().getDateHeureArrivee()));
+        
+        // 1) Construire les fenêtres TA sur TOUTES les planifications (indépendamment du véhicule)
+        List<List<PlanificationReservation>> fenetres = new ArrayList<>();
+        List<PlanificationReservation> fenetreActuelle = new ArrayList<>();
+        long debutFenetre = planifications.get(0).getReservation().getDateHeureArrivee().getTime();
+        
         for (PlanificationReservation p : planifications) {
-            int vehId = p.getReservation().getIdVehicule();
-            parVehicule.computeIfAbsent(vehId, k -> new ArrayList<>()).add(p);
+            long arrivee = p.getReservation().getDateHeureArrivee().getTime();
+            if (arrivee <= debutFenetre + taMillis) {
+                fenetreActuelle.add(p);
+            } else {
+                if (!fenetreActuelle.isEmpty()) {
+                    fenetres.add(new ArrayList<>(fenetreActuelle));
+                }
+                fenetreActuelle = new ArrayList<>();
+                fenetreActuelle.add(p);
+                debutFenetre = arrivee;
+            }
+        }
+        if (!fenetreActuelle.isEmpty()) {
+            fenetres.add(fenetreActuelle);
         }
         
-        for (List<PlanificationReservation> planifVehicule : parVehicule.values()) {
-            // Trier par date_heure_arrivee
-            planifVehicule.sort((a, b) -> a.getReservation().getDateHeureArrivee()
-                .compareTo(b.getReservation().getDateHeureArrivee()));
-            
-            List<List<PlanificationReservation>> sousGroupes = new ArrayList<>();
-            List<PlanificationReservation> groupeActuel = new ArrayList<>();
-            // debutFenetre FIXE = heure du premier vol du groupe courant
-            long debutFenetre = planifVehicule.get(0).getReservation().getDateHeureArrivee().getTime();
-            
-            for (PlanificationReservation p : planifVehicule) {
-                long arrivee = p.getReservation().getDateHeureArrivee().getTime();
-                if (arrivee <= debutFenetre + taMillis) {
-                    groupeActuel.add(p);
-                } else {
-                    if (!groupeActuel.isEmpty()) {
-                        sousGroupes.add(new ArrayList<>(groupeActuel));
-                    }
-                    groupeActuel = new ArrayList<>();
-                    groupeActuel.add(p);
-                    debutFenetre = arrivee; // Nouveau début = heure de ce vol
+        // 2) Pour chaque fenêtre TA, calculer heureDepart = MAX(arrivées), puis sous-grouper par véhicule
+        for (List<PlanificationReservation> fenetre : fenetres) {
+            // Calculer le MAX(date_heure_arrivee) de toute la fenêtre
+            Timestamp maxArriveeFenetre = fenetre.get(0).getReservation().getDateHeureArrivee();
+            for (PlanificationReservation p : fenetre) {
+                Timestamp arr = p.getReservation().getDateHeureArrivee();
+                if (arr.after(maxArriveeFenetre)) {
+                    maxArriveeFenetre = arr;
                 }
             }
-            if (!groupeActuel.isEmpty()) {
-                sousGroupes.add(groupeActuel);
+            
+            // Sous-grouper par véhicule (ordre d'apparition conservé)
+            Map<Integer, List<PlanificationReservation>> parVehicule = new LinkedHashMap<>();
+            for (PlanificationReservation p : fenetre) {
+                int vehId = p.getReservation().getIdVehicule();
+                parVehicule.computeIfAbsent(vehId, k -> new ArrayList<>()).add(p);
             }
             
-            for (List<PlanificationReservation> planifList : sousGroupes) {
-                groupes.add(construireUnGroupe(planifList));
+            for (List<PlanificationReservation> planifVehicule : parVehicule.values()) {
+                groupes.add(construireUnGroupe(planifVehicule, maxArriveeFenetre));
             }
         }
         
@@ -378,7 +359,7 @@ public class PlanificationService {
      * Construit un GroupeVehicule à partir d'une liste de planifications du même véhicule/fenêtre.
      * Calcule l'itinéraire nearest-neighbour avec les vraies distances.
      */
-    private GroupeVehicule construireUnGroupe(List<PlanificationReservation> planifList) throws SQLException {
+    private GroupeVehicule construireUnGroupe(List<PlanificationReservation> planifList, Timestamp heureDepartFenetre) throws SQLException {
         PlanificationReservation first = planifList.get(0);
         Reservation firstRes = first.getReservation();
         
@@ -387,7 +368,6 @@ public class PlanificationService {
         vehicule.setId(firstRes.getIdVehicule());
         vehicule.setReference(firstRes.getReferenceVehicule());
         vehicule.setTypeCarburant(firstRes.getTypeCarburant());
-        // Récupérer nombre_place depuis la première planification
         vehicule.setNombrePlace(firstRes.getCapaciteVehicule());
         
         GroupeVehicule groupe = new GroupeVehicule(vehicule);
@@ -395,19 +375,15 @@ public class PlanificationService {
         // Collecter les réservations
         List<Reservation> reservations = new ArrayList<>();
         int totalPassagers = 0;
-        Timestamp maxArrivee = firstRes.getDateHeureArrivee();
         
         for (PlanificationReservation p : planifList) {
             Reservation r = p.getReservation();
             reservations.add(r);
             totalPassagers += r.getNombrePassager();
-            if (r.getDateHeureArrivee().after(maxArrivee)) {
-                maxArrivee = r.getDateHeureArrivee();
-            }
         }
         
-        // Heure de départ = MAX(date_heure_arrivee) du groupe
-        Timestamp heureDepart = maxArrivee;
+        // Heure de départ = celle de la fenêtre TA (MAX de TOUTES les arrivées de la fenêtre)
+        Timestamp heureDepart = heureDepartFenetre;
         groupe.setHeureDepart(heureDepart);
         groupe.setTotalPassagers(totalPassagers);
         
@@ -475,5 +451,137 @@ public class PlanificationService {
         
         // Puis construire les groupes
         return construireGroupesParVehicule(date);
+    }
+
+    /**
+     * Calcule l'heure de départ d'un groupe = MAX(date_heure_arrivee).
+     */
+    private Timestamp calculerHeureDepart(List<Reservation> groupe) {
+        Timestamp max = groupe.get(0).getDateHeureArrivee();
+        for (Reservation r : groupe) {
+            if (r.getDateHeureArrivee().after(max)) {
+                max = r.getDateHeureArrivee();
+            }
+        }
+        return max;
+    }
+
+    /**
+     * Trouve l'hôtel le plus éloigné parmi les réservations du groupe.
+     * Utilisé pour estimer le temps de retour du véhicule (disponibilité).
+     */
+    private int trouverHotelPlusLoin(List<Reservation> reservations) throws SQLException {
+        int idHotelPlusLoin = reservations.get(0).getIdHotel();
+        double maxDistance = 0;
+        
+        String sql = "SELECT kilometer FROM distance WHERE from_id = 'TNR' AND to_id = ?";
+        try (Connection conn = DBConnection.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            for (Reservation r : reservations) {
+                ps.setString(1, String.valueOf(r.getIdHotel()));
+                try (ResultSet rs = ps.executeQuery()) {
+                    if (rs.next()) {
+                        double dist = rs.getDouble("kilometer");
+                        if (dist > maxDistance) {
+                            maxDistance = dist;
+                            idHotelPlusLoin = r.getIdHotel();
+                        }
+                    }
+                }
+            }
+        }
+        return idHotelPlusLoin;
+    }
+
+    /**
+     * Calcule l'ordre de dépose par nearest-neighbour.
+     * Départ depuis TNR, à chaque étape on va vers l'hôtel le plus proche.
+     * Départage alphabétique si même distance.
+     */
+    private List<Reservation> calculerOrdreDepose(List<Reservation> reservations) throws SQLException {
+        if (reservations.size() <= 1) {
+            return new ArrayList<>(reservations);
+        }
+        
+        Map<String, Double> distances = getAllDistances(reservations);
+        List<Reservation> restantes = new ArrayList<>(reservations);
+        List<Reservation> ordre = new ArrayList<>();
+        String positionActuelle = "TNR";
+        
+        while (!restantes.isEmpty()) {
+            Reservation plusProche = null;
+            double minDist = Double.MAX_VALUE;
+            
+            for (Reservation r : restantes) {
+                String key = positionActuelle + "-" + r.getIdHotel();
+                double dist = distances.getOrDefault(key, Double.MAX_VALUE);
+                if (dist < minDist) {
+                    minDist = dist;
+                    plusProche = r;
+                } else if (dist == minDist && plusProche != null) {
+                    // Départage alphabétique par nom d'hôtel
+                    if (r.getNomHotel().compareTo(plusProche.getNomHotel()) < 0) {
+                        plusProche = r;
+                    }
+                }
+            }
+            
+            if (plusProche != null) {
+                ordre.add(plusProche);
+                restantes.remove(plusProche);
+                positionActuelle = String.valueOf(plusProche.getIdHotel());
+            } else {
+                break;
+            }
+        }
+        
+        return ordre;
+    }
+
+    /**
+     * Récupère toutes les distances nécessaires pour le calcul d'itinéraire.
+     * TNR → chaque hôtel + inter-hôtels (dans les deux sens).
+     */
+    private Map<String, Double> getAllDistances(List<Reservation> reservations) throws SQLException {
+        Map<String, Double> distances = new HashMap<>();
+        Set<Integer> hotelIds = new HashSet<>();
+        for (Reservation r : reservations) {
+            hotelIds.add(r.getIdHotel());
+        }
+        
+        // TNR → hôtels
+        String sql = "SELECT from_id, to_id, kilometer FROM distance WHERE from_id = 'TNR' AND to_id = ANY(?)";
+        try (Connection conn = DBConnection.getConnection()) {
+            String[] ids = new String[hotelIds.size()];
+            int i = 0;
+            for (int id : hotelIds) {
+                ids[i++] = String.valueOf(id);
+            }
+            
+            try (PreparedStatement ps = conn.prepareStatement(sql)) {
+                ps.setArray(1, conn.createArrayOf("VARCHAR", ids));
+                try (ResultSet rs = ps.executeQuery()) {
+                    while (rs.next()) {
+                        String key = rs.getString("from_id") + "-" + rs.getString("to_id");
+                        distances.put(key, rs.getDouble("kilometer"));
+                    }
+                }
+            }
+            
+            // Inter-hôtels (les deux directions)
+            String sql2 = "SELECT from_id, to_id, kilometer FROM distance WHERE from_id = ANY(?) AND to_id = ANY(?)";
+            try (PreparedStatement ps2 = conn.prepareStatement(sql2)) {
+                ps2.setArray(1, conn.createArrayOf("VARCHAR", ids));
+                ps2.setArray(2, conn.createArrayOf("VARCHAR", ids));
+                try (ResultSet rs = ps2.executeQuery()) {
+                    while (rs.next()) {
+                        String key = rs.getString("from_id") + "-" + rs.getString("to_id");
+                        distances.put(key, rs.getDouble("kilometer"));
+                    }
+                }
+            }
+        }
+        
+        return distances;
     }
 }
