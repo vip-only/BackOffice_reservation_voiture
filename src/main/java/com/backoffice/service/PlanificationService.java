@@ -110,10 +110,11 @@ public class PlanificationService {
      * Assigner automatiquement les véhicules aux réservations sans véhicule.
      * 
      * NOUVELLES REGLES:
-     * 1. Traiter en priorité les réservations avec le plus de passagers (déjà trié dans DAO)
-     * 2. Regrouper les clients arrivant à la même date/heure dans la même voiture si capacité le permet
-     * 3. Pas de temps d'attente pour le regroupement
-     * 4. Ordre de dépose par distance minimale (nearest-neighbour)
+     * 1. Traiter les groupes dans l'ORDRE CHRONOLOGIQUE (date/heure d'arrivée)
+     * 2. Au sein de chaque groupe, traiter par nombre de passagers décroissant
+     * 3. Regrouper les clients arrivant à la même date/heure dans la même voiture si capacité le permet
+     * 4. Pas de temps d'attente pour le regroupement
+     * 5. Ordre de dépose par distance minimale (nearest-neighbour)
      */
     public void assignerVehiculesAutomatiquement(Date date) throws SQLException {
         // Récupérer toutes les réservations sans véhicule, triées par nombre de passagers DESC
@@ -124,7 +125,8 @@ public class PlanificationService {
         }
         
         // Grouper les réservations par date/heure d'arrivée exacte
-        Map<Timestamp, List<Reservation>> groupesParHeure = new LinkedHashMap<>();
+        // Utiliser TreeMap pour garantir l'ordre CHRONOLOGIQUE des clés
+        Map<Timestamp, List<Reservation>> groupesParHeure = new java.util.TreeMap<>();
         for (Reservation r : reservationsSansVehicule) {
             Timestamp ts = r.getDateHeureArrivee();
             if (ts != null) {
@@ -135,12 +137,17 @@ public class PlanificationService {
             }
         }
         
-        // Traiter chaque groupe de réservations (même heure d'arrivée)
+        // Trier chaque groupe par nombre de passagers DESC avant traitement
+        for (List<Reservation> groupe : groupesParHeure.values()) {
+            groupe.sort((r1, r2) -> Integer.compare(r2.getNombrePassager(), r1.getNombrePassager()));
+        }
+        
+        // Traiter chaque groupe de réservations dans l'ORDRE CHRONOLOGIQUE
         for (Map.Entry<Timestamp, List<Reservation>> entry : groupesParHeure.entrySet()) {
             Timestamp heureArrivee = entry.getKey();
             List<Reservation> groupe = entry.getValue();
             
-            // Le groupe est déjà trié par nombre de passagers DESC (grâce au DAO)
+            // Le groupe est maintenant trié par nombre de passagers DESC
             assignerGroupeReservations(groupe, heureArrivee);
         }
     }
@@ -217,7 +224,7 @@ public class PlanificationService {
     }
     
     /**
-     * Récupère les distances depuis TNR pour les hôtels du groupe.
+     * Recupere les distances depuis TNR pour les hotels du groupe.
      */
     private Map<Integer, Double> getDistancesHotels(List<Reservation> groupe) throws SQLException {
         Map<Integer, Double> distances = new HashMap<>();
@@ -226,7 +233,7 @@ public class PlanificationService {
             return distances;
         }
         
-        // Récupérer les IDs d'hôtels uniques
+        // Recuperer les IDs d'hotels uniques
         Set<Integer> hotelIds = new HashSet<>();
         for (Reservation r : groupe) {
             hotelIds.add(r.getIdHotel());
@@ -265,8 +272,80 @@ public class PlanificationService {
     }
     
     /**
-     * Calcule l'ordre de dépose selon l'heuristique du plus proche voisin (nearest-neighbour).
+     * Recupere toutes les distances (TNR vers hotels ET inter-hotels).
+     * Cle de la map: "from_id-to_id" (ex: "TNR-1", "1-2", etc.)
+     */
+    private Map<String, Double> getAllDistances(List<Reservation> groupe) throws SQLException {
+        Map<String, Double> distances = new HashMap<>();
+        
+        if (groupe == null || groupe.isEmpty()) {
+            return distances;
+        }
+        
+        // Recuperer les IDs d'hotels uniques
+        Set<Integer> hotelIds = new HashSet<>();
+        for (Reservation r : groupe) {
+            hotelIds.add(r.getIdHotel());
+        }
+        
+        if (hotelIds.isEmpty()) {
+            return distances;
+        }
+        
+        // Construire les placeholders pour les hotels
+        StringBuilder placeholders = new StringBuilder();
+        for (int i = 0; i < hotelIds.size(); i++) {
+            if (i > 0) placeholders.append(",");
+            placeholders.append("?");
+        }
+        
+        // Recuperer distances depuis TNR et entre hotels
+        String sql = "SELECT from_id, to_id, kilometer FROM distance " +
+                     "WHERE (from_id = 'TNR' AND to_id IN (" + placeholders + ")) " +
+                     "   OR (from_id IN (" + placeholders + ") AND to_id IN (" + placeholders + "))";
+        
+        try (Connection conn = DBConnection.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            
+            int idx = 1;
+            // Pour TNR -> hotels
+            for (Integer hotelId : hotelIds) {
+                ps.setString(idx++, String.valueOf(hotelId));
+            }
+            // Pour inter-hotels (from)
+            for (Integer hotelId : hotelIds) {
+                ps.setString(idx++, String.valueOf(hotelId));
+            }
+            // Pour inter-hotels (to)
+            for (Integer hotelId : hotelIds) {
+                ps.setString(idx++, String.valueOf(hotelId));
+            }
+            
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    String fromId = rs.getString("from_id");
+                    String toId = rs.getString("to_id");
+                    double km = rs.getDouble("kilometer");
+                    
+                    // Stocker la distance dans le sens original
+                    distances.put(fromId + "-" + toId, km);
+                    
+                    // Pour les distances inter-hotels (pas TNR), stocker aussi le sens inverse
+                    // Cela permet d'avoir une seule entree en base pour chaque paire d'hotels
+                    if (!"TNR".equals(fromId) && !"TNR".equals(toId)) {
+                        distances.put(toId + "-" + fromId, km);
+                    }
+                }
+            }
+        }
+        
+        return distances;
+    }
+    
+    /**
+     * Calcule l'ordre de depose selon l'heuristique du plus proche voisin (nearest-neighbour).
      * Part de TNR, va au plus proche, puis au suivant le plus proche, etc.
+     * Utilise les vraies distances inter-hotels stockees en base.
      */
     private List<Reservation> calculerOrdreDepose(List<Reservation> groupe) throws SQLException {
         if (groupe == null || groupe.isEmpty()) {
@@ -276,48 +355,45 @@ public class PlanificationService {
             return new ArrayList<>(groupe);
         }
         
-        // Récupérer les distances depuis TNR
-        Map<Integer, Double> distancesTNR = getDistancesHotels(groupe);
-        
-        // Pour nearest-neighbour, on a besoin des distances inter-hôtels
-        // Simplification: on utilise les distances depuis TNR comme approximation
-        // (en réalité, il faudrait une matrice de distances entre tous les hôtels)
+        // Recuperer TOUTES les distances (TNR->hotels et inter-hotels)
+        Map<String, Double> allDistances = getAllDistances(groupe);
         
         List<Reservation> ordreDepose = new ArrayList<>();
         List<Reservation> restants = new ArrayList<>(groupe);
         
-        // Point de départ: TNR (distance 0)
-        double positionActuelle = 0;
-        int hotelActuel = -1; // Représente TNR
+        // Point de depart: TNR
+        String positionActuelle = "TNR";
         
         while (!restants.isEmpty()) {
-            // Trouver la réservation dont l'hôtel est le plus proche de la position actuelle
+            // Trouver la reservation dont l'hotel est le plus proche de la position actuelle
             Reservation plusProche = null;
             double distanceMinimale = Double.MAX_VALUE;
+            String nomHotelMinimal = null; // Pour departage par ordre alphabetique si meme distance
             
             for (Reservation r : restants) {
-                double distanceHotel = distancesTNR.getOrDefault(r.getIdHotel(), Double.MAX_VALUE);
+                // Cle pour trouver la distance: "position_actuelle-id_hotel"
+                String key = positionActuelle + "-" + r.getIdHotel();
+                double distanceDepuisActuel = allDistances.getOrDefault(key, Double.MAX_VALUE);
                 
-                // Si on est à TNR (hotelActuel = -1), on prend la distance directe
-                // Sinon, on approxime par |distance(hotel) - distance(actuel)|
-                double distanceDepuisActuel;
-                if (hotelActuel == -1) {
-                    distanceDepuisActuel = distanceHotel;
-                } else {
-                    double distanceActuelle = distancesTNR.getOrDefault(hotelActuel, 0.0);
-                    distanceDepuisActuel = Math.abs(distanceHotel - distanceActuelle);
-                }
-                
-                if (distanceDepuisActuel < distanceMinimale) {
+                // Choisir le plus proche, ou en cas d'egalite, ordre alphabetique du nom d'hotel
+                if (distanceDepuisActuel < distanceMinimale || 
+                    (distanceDepuisActuel == distanceMinimale && nomHotelMinimal != null && 
+                     r.getNomHotel().compareTo(nomHotelMinimal) < 0)) {
                     distanceMinimale = distanceDepuisActuel;
                     plusProche = r;
+                    nomHotelMinimal = r.getNomHotel();
                 }
             }
             
             if (plusProche != null) {
                 ordreDepose.add(plusProche);
                 restants.remove(plusProche);
-                hotelActuel = plusProche.getIdHotel();
+                // Nouvelle position = l'hotel qu'on vient de visiter
+                positionActuelle = String.valueOf(plusProche.getIdHotel());
+            } else {
+                // Aucune distance trouvee, ajouter les restants dans l'ordre
+                ordreDepose.addAll(restants);
+                break;
             }
         }
         
