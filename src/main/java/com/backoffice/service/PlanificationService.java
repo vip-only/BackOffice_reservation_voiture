@@ -2,6 +2,8 @@ package com.backoffice.service;
 
 import com.backoffice.dao.ReservationDAO;
 import com.backoffice.database.DBConnection;
+import com.backoffice.model.GroupeVehicule;
+import com.backoffice.model.GroupeVehicule.EtapeItineraire;
 import com.backoffice.model.PlanificationReservation;
 import com.backoffice.model.Reservation;
 import com.backoffice.model.Vehicule;
@@ -398,5 +400,102 @@ public class PlanificationService {
         }
         
         return ordreDepose;
+    }
+    
+    /**
+     * Construit les groupes de réservations par véhicule pour une date donnée.
+     * Regroupe les réservations ayant le même véhicule et la même heure d'arrivée.
+     */
+    public List<GroupeVehicule> construireGroupesParVehicule(Date date) throws SQLException {
+        List<GroupeVehicule> groupes = new ArrayList<>();
+        
+        // Récupérer les planifications (réservations avec véhicule assigné)
+        List<PlanificationReservation> planifications = getPlanificationsByDate(date);
+        
+        // Grouper par véhicule + heure d'arrivée
+        Map<String, List<PlanificationReservation>> groupesMap = new LinkedHashMap<>();
+        
+        for (PlanificationReservation p : planifications) {
+            Reservation r = p.getReservation();
+            // Clé = vehicule_id + timestamp arrivée
+            String key = r.getIdVehicule() + "_" + r.getDateHeureArrivee().getTime();
+            groupesMap.computeIfAbsent(key, k -> new ArrayList<>()).add(p);
+        }
+        
+        // Construire les GroupeVehicule
+        for (List<PlanificationReservation> planifList : groupesMap.values()) {
+            if (planifList.isEmpty()) continue;
+            
+            PlanificationReservation first = planifList.get(0);
+            Reservation firstRes = first.getReservation();
+            
+            // Créer le véhicule
+            Vehicule vehicule = new Vehicule();
+            vehicule.setId(firstRes.getIdVehicule());
+            vehicule.setReference(firstRes.getReferenceVehicule());
+            vehicule.setTypeCarburant(firstRes.getTypeCarburant());
+            
+            GroupeVehicule groupe = new GroupeVehicule(vehicule);
+            groupe.setHeureDepart(first.getHeureDepart());
+            groupe.setHeureRetour(first.getHeureRetour());
+            
+            int totalPassagers = 0;
+            double distanceTotale = 0;
+            int dureeTotale = 0;
+            
+            List<Reservation> reservations = new ArrayList<>();
+            for (PlanificationReservation p : planifList) {
+                reservations.add(p.getReservation());
+                totalPassagers += p.getReservation().getNombrePassager();
+                distanceTotale = Math.max(distanceTotale, p.getDistanceKm());
+                dureeTotale = Math.max(dureeTotale, p.getDureeAllerMinutes() * 2);
+            }
+            
+            groupe.setReservations(reservations);
+            groupe.setTotalPassagers(totalPassagers);
+            groupe.setDistanceTotaleKm(distanceTotale);
+            groupe.setDureeTotaleMinutes(dureeTotale);
+            
+            // Construire l'itinéraire (simplifié)
+            List<EtapeItineraire> itineraire = new ArrayList<>();
+            String positionActuelle = "TNR";
+            Timestamp heureActuelle = first.getHeureDepart();
+            
+            for (Reservation r : reservations) {
+                double distanceKm = first.getDistanceKm(); // Simplification
+                int dureeMinutes = first.getDureeAllerMinutes();
+                heureActuelle = new Timestamp(heureActuelle.getTime() + dureeMinutes * 60 * 1000);
+                
+                EtapeItineraire etape = new EtapeItineraire(
+                    positionActuelle, r.getNomHotel(), distanceKm, dureeMinutes, heureActuelle);
+                etape.getPassagersDeposes().add(r.getClient());
+                itineraire.add(etape);
+                
+                positionActuelle = r.getNomHotel();
+            }
+            
+            // Retour TNR
+            EtapeItineraire retour = new EtapeItineraire(
+                positionActuelle, "TNR", first.getDistanceKm(), first.getDureeAllerMinutes(), 
+                first.getHeureRetour());
+            itineraire.add(retour);
+            
+            groupe.setItineraire(itineraire);
+            groupes.add(groupe);
+        }
+        
+        return groupes;
+    }
+    
+    /**
+     * Regroupe et assigne automatiquement les véhicules pour une date.
+     * Exécute l'algorithme d'assignation puis construit les groupes.
+     */
+    public List<GroupeVehicule> regrouperEtAssigner(Date date) throws SQLException {
+        // D'abord assigner les véhicules
+        assignerVehiculesAutomatiquement(date);
+        
+        // Puis construire les groupes
+        return construireGroupesParVehicule(date);
     }
 }
