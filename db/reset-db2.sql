@@ -1,7 +1,8 @@
 -- =========================================
--- SCRIPT DE REINITIALISATION COMPLETE
+-- SCRIPT DE REINITIALISATION COMPLETE - SPRINT 5
 -- Date: 11-03-2026
--- Scénario de test pour l'assignation automatique
+-- Test du Temps d'Attente (TA = 30 minutes)
+-- Base de donnees: backoffice
 -- =========================================
 
 -- =========================================
@@ -100,13 +101,8 @@ INSERT INTO lieu (code, libelle) VALUES
 
 -- Paramètres
 INSERT INTO parametre (cle, valeur, unite) VALUES
-    ('TA', 30, 'minutes'),              -- Temps d'attente (non utilisé dans le calcul)
+    ('TA', 30, 'minutes'),              -- Temps d'attente = 30 minutes
     ('VITESSE_MOYENNE', 30, 'km/h');    -- Vitesse moyenne
-
--- Distances (TNR vers chaque hotel + distances inter-hotels)
--- from_id = 'TNR' ou id_hotel, to_id = id_hotel (en VARCHAR)
--- NOTE: Carlton (id=5) et Ibis (id=3) ont la meme distance (18 km)
---       Panorama (id=6) et Colbert (id=1) ont la meme distance (15 km)
 
 -- Distances depuis TNR (aeroport)
 INSERT INTO distance (from_id, to_id, kilometer) VALUES 
@@ -118,29 +114,21 @@ INSERT INTO distance (from_id, to_id, kilometer) VALUES
     ('TNR', '6', 15.0);   -- TNR -> Panorama: 15 km (MEME que Colbert!)
 
 -- Distances INTER-HOTELS (pour nearest-neighbour)
--- OPTIMISATION: Une seule entree par paire d'hotels (pas de redondance)
--- Le code Java gere automatiquement la recherche dans les deux sens
--- Convention: from_id < to_id (plus petit ID vers plus grand ID)
 INSERT INTO distance (from_id, to_id, kilometer) VALUES 
-    -- Depuis Colbert (1) vers hotels avec ID > 1
     ('1', '2', 8.0),    -- Colbert <-> Novotel
     ('1', '3', 5.0),    -- Colbert <-> Ibis
     ('1', '4', 16.0),   -- Colbert <-> Lokanga
     ('1', '5', 5.0),    -- Colbert <-> Carlton
     ('1', '6', 3.0),    -- Colbert <-> Panorama (proches!)
-    -- Depuis Novotel (2) vers hotels avec ID > 2
     ('2', '3', 6.0),    -- Novotel <-> Ibis
     ('2', '4', 10.0),   -- Novotel <-> Lokanga
     ('2', '5', 6.0),    -- Novotel <-> Carlton
     ('2', '6', 9.0),    -- Novotel <-> Panorama
-    -- Depuis Ibis (3) vers hotels avec ID > 3
     ('3', '4', 14.0),   -- Ibis <-> Lokanga
     ('3', '5', 2.0),    -- Ibis <-> Carlton (proches!)
     ('3', '6', 6.0),    -- Ibis <-> Panorama
-    -- Depuis Lokanga (4) vers hotels avec ID > 4
     ('4', '5', 14.0),   -- Lokanga <-> Carlton
     ('4', '6', 17.0),   -- Lokanga <-> Panorama
-    -- Depuis Carlton (5) vers hotels avec ID > 5
     ('5', '6', 6.0);    -- Carlton <-> Panorama
 
 -- Vehicules (tries par capacite et type carburant)
@@ -185,245 +173,216 @@ ORDER BY r.date_heure_arrivee;
 
 
 -- =========================================
--- 5. SCENARIO DE TEST COMPLET - TOUTES FONCTIONNALITES
+-- 5. SCENARIO DE TEST - SPRINT 5 (TA = Temps d'Attente)
 -- =========================================
 -- Date: 11 Mars 2026
+-- TA = 30 minutes (paramètre en base)
 -- 
 -- ╔══════════════════════════════════════════════════════════════════════════╗
 -- ║                    FONCTIONNALITES A TESTER                              ║
 -- ╠══════════════════════════════════════════════════════════════════════════╣
--- ║ F1. Règle 1: capacité >= nombre de passagers                             ║
--- ║ F2. Règle 2: plus petite capacité satisfaisante                          ║
--- ║ F3. Règle 3: préférence Diesel si égalité de capacité                    ║
+-- ║ F1. Capacité >= nombre de passagers                                      ║
+-- ║ F2. Plus petite capacité satisfaisante                                   ║
+-- ║ F3. Préférence Diesel si égalité de capacité                             ║
 -- ║ F4. Priorité par nombre de passagers décroissant                         ║
--- ║ F5. Regroupement si même date/heure ET capacité suffisante               ║
+-- ║ F5. Regroupement par fenêtre TA (pas timestamp exact)                    ║
 -- ║ F6. Chevauchement: véhicule occupé = indisponible                        ║
 -- ║ F7. Nearest-neighbour pour ordre de dépose                               ║
--- ║ F8. Départage par ORDRE ALPHABÉTIQUE du nom d'hôtel si même distance     ║
--- ║ F9. Combinaison chevauchement + regroupement                             ║
+-- ║ F8. Départage ALPHABÉTIQUE si même distance                              ║
+-- ║ F9. Heure de départ véhicule = MAX(arrivées) du groupe TA               ║
 -- ╚══════════════════════════════════════════════════════════════════════════╝
 --
 -- DONNÉES DE RÉFÉRENCE:
 -- ┌─────────────┬─────────┬──────────┐
 -- │ Hôtel       │ ID      │ Distance │
 -- ├─────────────┼─────────┼──────────┤
--- │ Carlton     │ 5       │ 18 km    │  ← C < I (alphabétique)
--- │ Colbert     │ 1       │ 15 km    │  ← C < P (alphabétique)
+-- │ Carlton     │ 5       │ 18 km    │
+-- │ Colbert     │ 1       │ 15 km    │
 -- │ Ibis        │ 3       │ 18 km    │
 -- │ Lokanga     │ 4       │ 30 km    │
 -- │ Novotel     │ 2       │ 22.5 km  │
 -- │ Panorama    │ 6       │ 15 km    │
 -- └─────────────┴─────────┴──────────┘
 --
--- Véhicules (triés par capacité):
--- VH-001(4,ES), VH-002(4,D), VH-003(7,D), VH-004(7,ES),
--- VH-005(12,D), VH-006(15,D), VH-007(20,D), VH-008(30,D)
+-- Véhicules: VH-001(4,ES), VH-002(4,D), VH-003(7,D), VH-004(7,ES),
+--            VH-005(12,D), VH-006(15,D), VH-007(20,D), VH-008(30,D)
 --
 -- ═══════════════════════════════════════════════════════════════════════════
--- TEST 1: REGLES DE BASE (F1, F2, F3)
+-- TEST 1: VOL SEUL - REGLES DE BASE (F1, F2, F3)
 -- ═══════════════════════════════════════════════════════════════════════════
 -- 
 -- R1: 07:00 -> Colbert, 3 passagers
---     F1: Besoin >= 3 places → VH-001(4), VH-002(4), VH-003(7)... OK
---     F2: Plus petite = 4 places → VH-001 ou VH-002
---     F3: Préférer Diesel → VH-002 (4 places, Diesel) ✓
+--     Seul dans la fenêtre [07:00, 07:30]
+--     Départ véhicule = 07:00 (pas d'attente)
+--     F2+F3: VH-002 (4 places, Diesel) ✓
 --     Retour: 07:00 + 60min = 08:00
 --
 -- ═══════════════════════════════════════════════════════════════════════════
--- TEST 2: REGROUPEMENT SIMPLE (F5, F7)
+-- TEST 2: REGROUPEMENT PAR FENÊTRE TA (F5, F7, F9)
 -- ═══════════════════════════════════════════════════════════════════════════
 --
--- R2: 08:30 -> Colbert (15km), 2 passagers
--- R3: 08:30 -> Ibis (18km), 2 passagers
--- R4: 08:30 -> Novotel (22.5km), 2 passagers
---     Total = 6 passagers à 08:30
---     F5: Regroupement possible dans VH-003 (7 places) ✓
---     F7: Ordre nearest-neighbour:
---         1. Colbert (15km)
---         2. Ibis (18km)
---         3. Novotel (22.5km)
---     Retour: 08:30 + 90min = 10:00
+-- R2: 08:30 -> Colbert (15km), 2 passagers  ─┐
+-- R3: 08:45 -> Ibis (18km), 2 passagers      ─┼─ Fenêtre [08:30, 09:00]
+-- R4: 08:55 -> Novotel (22.5km), 2 passagers ─┘
+--     Total = 6 passagers
+--     F9: Départ véhicule = MAX(08:30, 08:45, 08:55) = 08:55
+--     F5: Regroupement dans VH-003 (7 places) ✓
+--     F7: Nearest-neighbour: Colbert(15) → Ibis(5km) → Novotel(6km)
+--     Attentes: R2=25min, R3=10min, R4=0min
 --
 -- ═══════════════════════════════════════════════════════════════════════════
--- TEST 3: REGROUPEMENT AVEC VEHICULE PLUS GRAND (F5, F1, F2, F3)
+-- TEST 3: FENÊTRE TA AVEC GRAND GROUPE (F5, F9)
 -- ═══════════════════════════════════════════════════════════════════════════
 --
--- R5: 10:30 -> Lokanga, 11 passagers
--- R6: 10:30 -> Colbert, 2 passagers
+-- R5: 10:30 -> Lokanga, 11 passagers   ─┐ Fenêtre [10:30, 11:00]
+-- R6: 10:50 -> Colbert, 2 passagers    ─┘
 --     Total = 13 passagers
---     VH-005 max = 12 places → trop petit
---     VH-006 max = 15 places → SUFFISANT!
---     F5: Regroupement POSSIBLE dans VH-006 (15 places)
---     F7: Ordre nearest-neighbour: Colbert(15km) → Lokanga(30km)
---     Retour: 10:30 + 120min = 12:30
+--     F9: Départ = MAX(10:30, 10:50) = 10:50
+--     VH-006 (15 places) ✓
+--     Attente: R5=20min, R6=0min
 --
 -- ═══════════════════════════════════════════════════════════════════════════
--- TEST 4: CHEVAUCHEMENT SIMPLE (F6)
+-- TEST 4: VOL SEUL + CHEVAUCHEMENT (F6)
 -- ═══════════════════════════════════════════════════════════════════════════
 --
 -- R7: 12:00 -> Novotel (22.5km), 5 passagers
---     VH-002 occupé (10:30-11:30) → LIBRE à 12:00 ✓
---     VH-003 occupé (08:30-10:00) → LIBRE à 12:00 ✓
---     VH-005 occupé (10:30-12:30) → OCCUPÉ (chevauche 12:00) ✗
---     F6: Exclure VH-005
---     F2: Plus petite capacité >= 5 → VH-003 (7 places, Diesel) ✓
+--     Seul dans fenêtre [12:00, 12:30]
+--     Départ = 12:00
+--     VH-003 (7 places, Diesel) ✓
 --     Retour: 12:00 + 90min = 13:30
 --
 -- ═══════════════════════════════════════════════════════════════════════════
--- TEST 5: DEPARTAGE ALPHABETIQUE MEME DISTANCE (F8, F5, F7)
+-- TEST 5: DEPARTAGE ALPHABÉTIQUE + TA (F8, F5, F9)
 -- ═══════════════════════════════════════════════════════════════════════════
 --
--- R8:  14:00 -> Carlton (18km), 2 passagers
--- R9:  14:00 -> Ibis (18km), 2 passagers
--- R10: 14:00 -> Lokanga (30km), 2 passagers
---     Total = 6 passagers à 14:00
---     F5: Regroupement possible dans VH-003 (7 places)
---         VH-003 occupé (12:00-13:30) → LIBRE à 14:00 ✓
---         → VH-003 (Diesel préféré)
---     F7+F8: Ordre nearest-neighbour avec départage ALPHABÉTIQUE:
---         Carlton et Ibis = 18km (même distance)
---         Départage alphabétique: "Carlton" < "Ibis" (C < I)
---         → Carlton AVANT Ibis
---         1. Carlton (18km)    ← premier alphabétiquement
---         2. Ibis (18km)       ← second alphabétiquement
---         3. Lokanga (30km)
---     Retour: 14:00 + 120min = 16:00
+-- R8:  14:00 -> Carlton (18km), 2 passagers  ─┐
+-- R9:  14:10 -> Ibis (18km), 2 passagers     ─┼─ Fenêtre [14:00, 14:30]
+-- R10: 14:20 -> Lokanga (30km), 2 passagers  ─┘
+--     Total = 6 passagers
+--     F9: Départ = MAX(14:00, 14:10, 14:20) = 14:20
+--     VH-003 libre (retour 13:30 < 14:20) ✓
+--     F7+F8: Carlton < Ibis (même distance 18km, C < I)
+--     Attentes: R8=20min, R9=10min, R10=0min
 --
 -- ═══════════════════════════════════════════════════════════════════════════
--- TEST 6: CHEVAUCHEMENT + REGROUPEMENT + DEPARTAGE ALPHABETIQUE (F9 = F5+F6+F8)
+-- TEST 6: CHEVAUCHEMENT + TA + ALPHABÉTIQUE (F5+F6+F8+F9)
 -- ═══════════════════════════════════════════════════════════════════════════
 --
--- R11: 15:30 -> Colbert (15km), 2 passagers
--- R12: 15:30 -> Panorama (15km), 2 passagers
---     Total = 4 passagers à 15:30
---     VH-003 occupé (14:00-16:00) → OCCUPÉ (chevauche 15:30) ✗
---     VH-005 libre (retour 12:30 < 15:30) ✓
---     F9: Regroupement possible mais VH-003 occupé
---         → VH-002 (4 places, Diesel, libre) ✓
---     F7+F8: Ordre nearest-neighbour avec départage ALPHABÉTIQUE:
---         Colbert et Panorama = 15km (même distance)
---         Départage alphabétique: "Colbert" < "Panorama" (C < P)
---         → Colbert AVANT Panorama
---         1. Colbert (15km)    ← premier alphabétiquement
---         2. Panorama (15km)   ← second alphabétiquement
---     Retour: 15:30 + 60min = 16:30
+-- R11: 15:30 -> Colbert (15km), 2 passagers  ─┐ Fenêtre [15:30, 16:00]
+-- R12: 15:45 -> Panorama (15km), 2 passagers ─┘
+--     Total = 4 passagers
+--     F9: Départ = MAX(15:30, 15:45) = 15:45
+--     VH-002 (4 places, Diesel, libre) ✓
+--     F8: Colbert < Panorama (C < P)
+--     Attente: R11=15min, R12=0min
 --
 -- ═══════════════════════════════════════════════════════════════════════════
--- TEST 7: TOUS VEHICULES DIESEL PETITS OCCUPES (F1, F2, F6)
+-- TEST 7: VOL SEUL - DIESEL INDISPONIBLE (F1, F2, F6)
 -- ═══════════════════════════════════════════════════════════════════════════
 --
 -- R13: 16:00 -> Ibis (18km), 3 passagers
---     VH-002 occupé (15:30-16:30) → OCCUPÉ ✗
---     VH-003 occupé (14:00-16:00) → retour = 16:00 = ENCORE OCCUPÉ ✗
---     VH-001 libre (4 places, Essence) → disponible ✓
---     F1+F2: Plus petite capacité >= 3 et disponible → VH-001 (4 places, Essence)
---     Retour: 16:00 + 72min = 17:12
+--     Seul dans fenêtre [16:00, 16:30]
+--     VH-002 occupé, VH-003 occupé → VH-001 (4 places, Essence)
 --
 -- ═══════════════════════════════════════════════════════════════════════════
--- TEST 8: REGROUPEMENT MAX CAPACITE EXACTE (F5)
+-- TEST 8: REGROUPEMENT CAPACITÉ EXACTE + TA (F5, F9)
 -- ═══════════════════════════════════════════════════════════════════════════
 --
--- R14: 18:00 -> Colbert (15km), 4 passagers
--- R15: 18:00 -> Novotel (22.5km), 3 passagers
---     Total = 7 passagers à 18:00
---     F5: Regroupement EXACTEMENT dans VH-003 (7 places) ✓
---     F7: Ordre: 1. Colbert (15km), 2. Novotel (22.5km)
---     Retour: 18:00 + 90min = 19:30
+-- R14: 18:00 -> Colbert (15km), 4 passagers ─┐ Fenêtre [18:00, 18:30]
+-- R15: 18:20 -> Novotel (22.5km), 3 passagers ─┘
+--     Total = 7 passagers
+--     F9: Départ = MAX(18:00, 18:20) = 18:20
+--     VH-003 (7 places, exactement) ✓
+--     Attente: R14=20min, R15=0min
 --
 -- ═══════════════════════════════════════════════════════════════════════════
 --
 -- RÉSUMÉ ATTENDU (après assignation automatique):
--- ╔═══════╦════════════╦═══════════╦═════════════════╦═══════════╦══════════╗
--- ║ Rés.  ║ Heure      ║ Passagers ║ Hôtel           ║ Véhicule  ║ Retour   ║
--- ╠═══════╬════════════╬═══════════╬═════════════════╬═══════════╬══════════╣
--- ║ R1    ║ 07:00      ║ 3         ║ Colbert         ║ VH-002    ║ 08:00    ║
--- ╠═══════╬════════════╬═══════════╬═════════════════╬═══════════╬══════════╣
--- ║ R2    ║ 08:30      ║ 2         ║ Colbert         ║ VH-003    ║ 10:00    ║
--- ║ R3    ║ 08:30      ║ 2         ║ Ibis            ║ VH-003    ║ (groupe) ║
--- ║ R4    ║ 08:30      ║ 2         ║ Novotel         ║ VH-003    ║ (groupe) ║
--- ╠═══════╬════════════╬═══════════╬═════════════════╬═══════════╬══════════╣
--- ║ R5    ║ 10:30      ║ 11        ║ Lokanga         ║ VH-006    ║ 12:30    ║
--- ║ R6    ║ 10:30      ║ 2         ║ Colbert         ║ VH-006    ║ (groupe) ║
--- ╠═══════╬════════════╬═══════════╬═════════════════╬═══════════╬══════════╣
--- ║ R7    ║ 12:00      ║ 5         ║ Novotel         ║ VH-003    ║ 13:30    ║
--- ╠═══════╬════════════╬═══════════╬═════════════════╬═══════════╬══════════╣
--- ║ R8    ║ 14:00      ║ 2         ║ Carlton         ║ VH-003    ║ 16:00    ║
--- ║ R9    ║ 14:00      ║ 2         ║ Ibis            ║ VH-003    ║ (groupe) ║
--- ║ R10   ║ 14:00      ║ 2         ║ Lokanga         ║ VH-003    ║ (groupe) ║
--- ╠═══════╬════════════╬═══════════╬═════════════════╬═══════════╬══════════╣
--- ║ R11   ║ 15:30      ║ 2         ║ Colbert         ║ VH-002    ║ 16:30    ║
--- ║ R12   ║ 15:30      ║ 2         ║ Panorama        ║ VH-002    ║ (groupe) ║
--- ╠═══════╬════════════╬═══════════╬═════════════════╬═══════════╬══════════╣
--- ║ R13   ║ 16:00      ║ 3         ║ Ibis            ║ VH-001    ║ 17:12    ║
--- ╠═══════╬════════════╬═══════════╬═════════════════╬═══════════╬══════════╣
--- ║ R14   ║ 18:00      ║ 4         ║ Colbert         ║ VH-003    ║ 19:30    ║
--- ║ R15   ║ 18:00      ║ 3         ║ Novotel         ║ VH-003    ║ (groupe) ║
--- ╚═══════╩════════════╩═══════════╩═════════════════╩═══════════╩══════════╝
---
--- NOTES:
--- - R5/R6: 13 passagers regroupes dans VH-006 (15 places) - plus petit vehicule suffisant
--- - R8/R9: Carlton depose avant Ibis car "Carlton" < "Ibis" (alphabetique)
--- - R11/R12: Colbert depose avant Panorama car "Colbert" < "Panorama"
--- - R13: VH-001 (Essence) car VH-002 occupe (15:30-16:30) et VH-003 occupe (14:00-16:00)
+-- ╔═══════╦════════════╦═══════════╦═════════════════╦═══════════╦══════════════╦══════════╗
+-- ║ Rés.  ║ Heure vol  ║ Passagers ║ Hôtel           ║ Véhicule  ║ Départ véh.  ║ Attente  ║
+-- ╠═══════╬════════════╬═══════════╬═════════════════╬═══════════╬══════════════╬══════════╣
+-- ║ R1    ║ 07:00      ║ 3         ║ Colbert         ║ VH-002    ║ 07:00        ║ 0 min    ║
+-- ╠═══════╬════════════╬═══════════╬═════════════════╬═══════════╬══════════════╬══════════╣
+-- ║ R2    ║ 08:30      ║ 2         ║ Colbert         ║ VH-003    ║ 08:55        ║ 25 min   ║
+-- ║ R3    ║ 08:45      ║ 2         ║ Ibis            ║ VH-003    ║ 08:55        ║ 10 min   ║
+-- ║ R4    ║ 08:55      ║ 2         ║ Novotel         ║ VH-003    ║ 08:55        ║ 0 min    ║
+-- ╠═══════╬════════════╬═══════════╬═════════════════╬═══════════╬══════════════╬══════════╣
+-- ║ R5    ║ 10:30      ║ 11        ║ Lokanga         ║ VH-006    ║ 10:50        ║ 20 min   ║
+-- ║ R6    ║ 10:50      ║ 2         ║ Colbert         ║ VH-006    ║ 10:50        ║ 0 min    ║
+-- ╠═══════╬════════════╬═══════════╬═════════════════╬═══════════╬══════════════╬══════════╣
+-- ║ R7    ║ 12:00      ║ 5         ║ Novotel         ║ VH-003    ║ 12:00        ║ 0 min    ║
+-- ╠═══════╬════════════╬═══════════╬═════════════════╬═══════════╬══════════════╬══════════╣
+-- ║ R8    ║ 14:00      ║ 2         ║ Carlton         ║ VH-003    ║ 14:20        ║ 20 min   ║
+-- ║ R9    ║ 14:10      ║ 2         ║ Ibis            ║ VH-003    ║ 14:20        ║ 10 min   ║
+-- ║ R10   ║ 14:20      ║ 2         ║ Lokanga         ║ VH-003    ║ 14:20        ║ 0 min    ║
+-- ╠═══════╬════════════╬═══════════╬═════════════════╬═══════════╬══════════════╬══════════╣
+-- ║ R11   ║ 15:30      ║ 2         ║ Colbert         ║ VH-002    ║ 15:45        ║ 15 min   ║
+-- ║ R12   ║ 15:45      ║ 2         ║ Panorama        ║ VH-002    ║ 15:45        ║ 0 min    ║
+-- ╠═══════╬════════════╬═══════════╬═════════════════╬═══════════╬══════════════╬══════════╣
+-- ║ R13   ║ 16:00      ║ 3         ║ Ibis            ║ VH-001    ║ 16:00        ║ 0 min    ║
+-- ╠═══════╬════════════╬═══════════╬═════════════════╬═══════════╬══════════════╬══════════╣
+-- ║ R14   ║ 18:00      ║ 4         ║ Colbert         ║ VH-003    ║ 18:20        ║ 20 min   ║
+-- ║ R15   ║ 18:20      ║ 3         ║ Novotel         ║ VH-003    ║ 18:20        ║ 0 min    ║
+-- ╚═══════╩════════════╩═══════════╩═════════════════╩═══════════╩══════════════╩══════════╝
 
 
 -- =========================================
--- 6. RESERVATIONS DE TEST (15 reservations)
+-- 6. RESERVATIONS DE TEST (15 reservations) - Sprint 5
 -- =========================================
--- Date: 11 Mars 2026 - Executer ce script puis lancer l'assignation automatique
+-- Date: 11 Mars 2026 - Heures variées dans les fenêtres TA
 
--- TEST 1: Regles de base (F1, F2, F3) - Diesel prefere
+-- TEST 1: Vol seul
 INSERT INTO reservation (client, nombre_passager, date_heure_arrivee, id_hotel) VALUES
     ('R1-Alice Martin', 3, '2026-03-11 07:00:00', 1);
 
--- TEST 2: Regroupement simple (F5, F7) - Nearest-neighbour
+-- TEST 2: 3 vols dans fenêtre TA [08:30, 09:00] → départ véhicule 08:55
 INSERT INTO reservation (client, nombre_passager, date_heure_arrivee, id_hotel) VALUES
     ('R2-Bob Dupont', 2, '2026-03-11 08:30:00', 1);
 
 INSERT INTO reservation (client, nombre_passager, date_heure_arrivee, id_hotel) VALUES
-    ('R3-Claire Durand', 2, '2026-03-11 08:30:00', 3);
+    ('R3-Claire Durand', 2, '2026-03-11 08:45:00', 3);
 
 INSERT INTO reservation (client, nombre_passager, date_heure_arrivee, id_hotel) VALUES
-    ('R4-David Bernard', 2, '2026-03-11 08:30:00', 2);
+    ('R4-David Bernard', 2, '2026-03-11 08:55:00', 2);
 
--- TEST 3: Priorite passagers DESC (F4) - Pas de regroupement car > capacite max
+-- TEST 3: 2 vols dans fenêtre TA [10:30, 11:00] → départ véhicule 10:50
 INSERT INTO reservation (client, nombre_passager, date_heure_arrivee, id_hotel) VALUES
     ('R5-Emma Petit', 11, '2026-03-11 10:30:00', 4);
 
 INSERT INTO reservation (client, nombre_passager, date_heure_arrivee, id_hotel) VALUES
-    ('R6-Francois Moreau', 2, '2026-03-11 10:30:00', 1);
+    ('R6-Francois Moreau', 2, '2026-03-11 10:50:00', 1);
 
--- TEST 4: Chevauchement simple (F6) - VH-005 occupe
+-- TEST 4: Vol seul
 INSERT INTO reservation (client, nombre_passager, date_heure_arrivee, id_hotel) VALUES
     ('R7-Gabrielle Simon', 5, '2026-03-11 12:00:00', 2);
 
--- TEST 5: Departage ALPHABETIQUE (F8) - Carlton < Ibis (meme distance 18km)
+-- TEST 5: 3 vols dans fenêtre TA [14:00, 14:30] → départ véhicule 14:20
 INSERT INTO reservation (client, nombre_passager, date_heure_arrivee, id_hotel) VALUES
     ('R8-Henri Laurent', 2, '2026-03-11 14:00:00', 5);
 
 INSERT INTO reservation (client, nombre_passager, date_heure_arrivee, id_hotel) VALUES
-    ('R9-Isabelle Roux', 2, '2026-03-11 14:00:00', 3);
+    ('R9-Isabelle Roux', 2, '2026-03-11 14:10:00', 3);
 
 INSERT INTO reservation (client, nombre_passager, date_heure_arrivee, id_hotel) VALUES
-    ('R10-Jean Leroy', 2, '2026-03-11 14:00:00', 4);
+    ('R10-Jean Leroy', 2, '2026-03-11 14:20:00', 4);
 
--- TEST 6: Chevauchement + Regroupement + Alphabetique (F9) - Colbert < Panorama
+-- TEST 6: 2 vols dans fenêtre TA [15:30, 16:00] → départ véhicule 15:45
 INSERT INTO reservation (client, nombre_passager, date_heure_arrivee, id_hotel) VALUES
     ('R11-Kevin Blanc', 2, '2026-03-11 15:30:00', 1);
 
 INSERT INTO reservation (client, nombre_passager, date_heure_arrivee, id_hotel) VALUES
-    ('R12-Lucie Mercier', 2, '2026-03-11 15:30:00', 6);
+    ('R12-Lucie Mercier', 2, '2026-03-11 15:45:00', 6);
 
--- TEST 7: Vehicules petits occupes (F1, F2, F6)
+-- TEST 7: Vol seul (diesel indisponible)
 INSERT INTO reservation (client, nombre_passager, date_heure_arrivee, id_hotel) VALUES
     ('R13-Marie Fournier', 3, '2026-03-11 16:00:00', 3);
 
--- TEST 8: Regroupement capacite exacte (F5) - 7 passagers dans VH-003 (7 places)
+-- TEST 8: 2 vols dans fenêtre TA [18:00, 18:30] → départ véhicule 18:20
 INSERT INTO reservation (client, nombre_passager, date_heure_arrivee, id_hotel) VALUES
     ('R14-Nicolas Garnier', 4, '2026-03-11 18:00:00', 1);
 
 INSERT INTO reservation (client, nombre_passager, date_heure_arrivee, id_hotel) VALUES
-    ('R15-Olivier Perrin', 3, '2026-03-11 18:00:00', 2);
+    ('R15-Olivier Perrin', 3, '2026-03-11 18:20:00', 2);
 
 
 -- =========================================

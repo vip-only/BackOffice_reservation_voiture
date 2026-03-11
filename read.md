@@ -26,3 +26,13 @@ _ préparation de script d'réinitialisation
 
  liste reservation sans vehicule
 
+Sprint5 : Temps d attente 
+Afaka atambatra anaty vehicule ray ny reservation maromar
+Raha misy vol tonga ao anaty TA , dia miaraka ireo
+ex: TA =30min , vol =8h 
+izay vol tafiditra am ireo dia atambatra (8h30), raha tsisy vol apres 8h dia miainga 8h , raha misy vol 8h15 dia miara depart 8h15 satria meme regroupement, 
+Heure de depart = miamikina am izay vol farany ndrindra
+-Regle tsy miova :
+Le plus pres
+Diesel , essence 
+random
