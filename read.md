@@ -53,3 +53,14 @@ Le regroupement fonctionne:
 _ on prend le premier vol on regarde si d'autres vols sont dans le TA si oui toutes les voitures ont pour départ l'heure du dernier vol du regroupement
 _ et le prochain vol hors regroupement sera la premiere heure pour le nouveau regroupement et on regarde les vols dans le regroupement 
 
+
+
+Les voitures dispo sont les voitures dispos entre la 1ere heure du regroupement jusqu'à la 1ere heure+TA dans ce cas le depart du groupe sera la date la plus recente entre le dernier heure du regroupement assiné et l'arrivée des voitures
+
+
+
+sprint 6: considération des nb de trajets
+Dans le choix de l'asignation, on prendra la voiture qui ayant effectué le moins de trajet aujourd'hui en cas d'egalité de places et ensuite on regarde si c'est diesel ou essence 
+ 
+
+si une voiture n'a pas été assigné dans son regroupement de temps il faut l'assigner dans le prochain regroupement horaire suivant les regles.
