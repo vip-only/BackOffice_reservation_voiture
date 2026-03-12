@@ -53,6 +53,7 @@ Le regroupement fonctionne:
 _ on prend le premier vol on regarde si d'autres vols sont dans le TA si oui toutes les voitures ont pour départ l'heure du dernier vol du regroupement
 _ et le prochain vol hors regroupement sera la premiere heure pour le nouveau regroupement et on regarde les vols dans le regroupement 
 
+<<<<<<< Updated upstream
 
 
 Les voitures dispo sont les voitures dispos entre la 1ere heure du regroupement jusqu'à la 1ere heure+TA dans ce cas le depart du groupe sera la date la plus recente entre le dernier heure du regroupement et l'arrivée des voitures
@@ -64,3 +65,13 @@ Dans le choix de l'asignation, on prendra la voiture qui ayant effectué le moin
  
 
 si une voiture n'a pas été assigné dans son regroupement de temps il faut l'assigner dans le prochain regroupement horaire suivant les regles.
+=======
+Sprint 6 :
+Plannification (1 jour avant)
+Considerer les nombres de trajets 
+Rehefa tafaverina ny voiture ray dia afaka considererna ilay voiture
+Rehefa hitady voiture approprie am resa iray dia jerena hoe iza no manana capacite betsaka noho ny nombre passager
+Izay moins de trajet no alefa , na essence na diesel, rahamisy mitovy dia izay vao jerena ny carburant
+-Considere les reservations non assignes apres le prochain regroupement
+-heure de retour d'une voiture 
+>>>>>>> Stashed changes
