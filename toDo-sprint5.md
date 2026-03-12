@@ -87,13 +87,27 @@ Ajouter la gestion du **temps d'attente (TA)** pour regrouper les réservations 
    ```
    heure_depart = MAX(MAX(date_heure_arrivee du groupe), heure_disponibilite_vehicule)
    ```
-   - Si le véhicule est libre avant le dernier vol → départ = heure du dernier vol.
-   - Si le véhicule finit une mission **après** le dernier vol → départ repoussé à la dispo du véhicule.
-   - **Exemple** :
+   - Si le véhicule est libre **avant ou pendant** la fenêtre `[heure_vol_1, heure_vol_1 + TA]` → départ = heure du **dernier vol** du groupe.
+   - Si le véhicule devient disponible **après** le dernier vol (mais était sélectionnable car libre dans `[heure_vol_1, heure_vol_1 + TA]`) → départ repoussé à `heure_disponibilite_vehicule`.
+   - **Exemple 1 — véhicule libre dans la fenêtre** :
      ```
      Groupe : vols 08h00, 08h15, 08h20  → MAX vols = 08h20
-     Véhicule disponible à : 08h35
-     → Heure de départ effective = MAX(08h20, 08h35) = 08h35
+     Fenêtre TA : [08h00, 08h30]
+     Véhicule disponible à : 08h10  ✅ libre dans [08h00, 08h30]
+     → Heure de départ effective = MAX(08h20, 08h10) = 08h20
+     ```
+   - **Exemple 2 — véhicule disponible après le dernier vol** :
+     ```
+     Groupe : vols 08h00, 08h15, 08h20  → MAX vols = 08h20
+     Fenêtre TA : [08h00, 08h30]
+     Véhicule disponible à : 08h25  ✅ libre dans [08h00, 08h30] (finit avant 08h30)
+     → Heure de départ effective = MAX(08h20, 08h25) = 08h25
+     ```
+   - **Exemple 3 — véhicule exclu** :
+     ```
+     Groupe : vols 08h00, 08h15, 08h20
+     Fenêtre TA : [08h00, 08h30]
+     Véhicule disponible à : 08h35  ❌ hors fenêtre → exclu de R1b
      ```
 
    ---
@@ -127,12 +141,15 @@ Ajouter la gestion du **temps d'attente (TA)** pour regrouper les réservations 
    │         └─ NON → continuer
    │
    ├─ R1b : Filtrer véhicules libres sur [vol_1, vol_1 + TA]
+   │         └─ Véhicule éligible si heure_disponibilite <= vol_1 + TA
    │
    ├─ R1c : Parmi éligibles → plus petite capacité >= passagers
    │
    ├─ R1d : Égalité capacité → préférer Diesel
    │
    ├─ R2  : heure_depart = MAX(MAX_vols_groupe, dispo_véhicule)
+   │         ├─ dispo_véhicule <= dernier_vol  → départ = dernier_vol
+   │         └─ dispo_véhicule >  dernier_vol  → départ = dispo_véhicule
    │
    ├─ R3  : Nearest-neighbour pour l'ordre de dépose
    │
@@ -192,8 +209,10 @@ Ajouter la gestion du **temps d'attente (TA)** pour regrouper les réservations 
 | T5 | Vols 08h00 + 08h10 (hôtels différents) | Nearest-neighbour appliqué |
 | T6 | Groupe avec Colbert + Panorama (même distance) | Ordre alphabétique : Colbert → Panorama |
 | T7 | Véhicule déjà assigné dans le groupe, capacité suffisante | Réutilisation du véhicule existant (R0a) |
-| T8 | Véhicule dispo à 08h35, vols MAX=08h20 | Départ effectif = 08h35 (R0c) |
-| T9 | Véhicule occupe [08h00–08h25], groupe [08h00–08h30] | Véhicule exclu de la sélection (R0b) |
+| T8 | Véhicule dispo à 08h25, vols MAX=08h20, TA=30 → fenêtre [08h00,08h30] | Véhicule éligible (08h25 ≤ 08h30), départ = MAX(08h20, 08h25) = **08h25** |
+| T9 | Véhicule dispo à 08h35, fenêtre [08h00,08h30] | Véhicule **exclu** (08h35 > 08h30) |
+| T10 | Véhicule dispo à 08h10, vols MAX=08h20 | Départ = MAX(08h20, 08h10) = **08h20** |
+| T11 | Véhicule occupe [08h00–08h25], groupe [08h00–08h30] | Véhicule exclu de la sélection (R1b) |
 
 ### Scripts SQL
 
@@ -214,24 +233,44 @@ Ajouter la gestion du **temps d'attente (TA)** pour regrouper les réservations 
 
 ### Précision importante : Heure de départ du véhicule
 
-**Règle** : Le véhicule part à l'heure du **dernier vol** dans la fenêtre TA.
+**Règle** : Le véhicule part au **plus tard** entre le **dernier vol** du groupe et sa propre **disponibilité**, à condition qu'il soit disponible dans la fenêtre `[heure_vol_1, heure_vol_1 + TA]`.
 
-**Exemple** (TA = 30 min) :
 ```
-Vols : 08h00, 08h15, 08h20
+heure_depart_effective = MAX(MAX(date_heure_arrivee du groupe), heure_disponibilite_vehicule)
+                                                                 ^^^
+                          condition : heure_disponibilite <= heure_vol_1 + TA
+```
 
-Fenêtre TA : [08h00, 08h30]
-Les 3 vols sont dans la fenêtre → 1 seul groupe
+**Exemples** (TA = 30 min, fenêtre = [08h00, 08h30]) :
 
-Heure de départ véhicule = MAX(08h00, 08h15, 08h20) = 08h20
+```
+Cas A — Véhicule disponible AVANT le dernier vol :
+  Vols : 08h00, 08h15, 08h20
+  Véhicule dispo : 08h10  ✅ (08h10 ≤ 08h30)
+  → heure_depart = MAX(08h20, 08h10) = 08h20
 
-┌──────────┬──────────────┬─────────────────┐
-│ Vol      │ Heure arrivée│ Attente client  │
-├──────────┼──────────────┼─────────────────┤
-│ Vol A    │ 08h00        │ 20 min          │
-│ Vol B    │ 08h15        │ 5 min           │
-│ Vol C    │ 08h20        │ 0 min (départ)  │
-└──────────┴──────────────┴─────────────────┘
+  ┌──────────┬──────────────┬─────────────────┐
+  │ Vol      │ Heure arrivée│ Attente client  │
+  ├──────────┼──────────────┼─────────────────┤
+  │ Vol A    │ 08h00        │ 20 min          │
+  │ Vol B    │ 08h15        │ 5 min           │
+  │ Vol C    │ 08h20        │ 0 min (départ)  │
+  └──────────┴──────────────┴─────────────────┘
 
-→ Tous les passagers partent ensemble à 08h20
+Cas B — Véhicule disponible APRÈS le dernier vol (mais dans la fenêtre) :
+  Vols : 08h00, 08h15, 08h20
+  Véhicule dispo : 08h25  ✅ (08h25 ≤ 08h30)
+  → heure_depart = MAX(08h20, 08h25) = 08h25
+
+  ┌──────────┬──────────────┬─────────────────┐
+  │ Vol      │ Heure arrivée│ Attente client  │
+  ├──────────┼──────────────┼─────────────────┤
+  │ Vol A    │ 08h00        │ 25 min          │
+  │ Vol B    │ 08h15        │ 10 min          │
+  │ Vol C    │ 08h20        │ 5 min           │
+  └──────────┴──────────────┴─────────────────┘
+  → Tous partent à 08h25 (le véhicule n'est prêt qu'à 08h25)
+
+Cas C — Véhicule disponible HORS fenêtre → EXCLU :
+  Véhicule dispo : 08h35  ❌ (08h35 > 08h30) → ne peut pas être sélectionné
 ```

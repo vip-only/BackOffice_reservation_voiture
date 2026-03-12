@@ -55,7 +55,7 @@ _ et le prochain vol hors regroupement sera la premiere heure pour le nouveau re
 
 
 
-Les voitures dispo sont les voitures dispos entre la 1ere heure du regroupement jusqu'à la 1ere heure+TA dans ce cas le depart du groupe sera la date la plus recente entre le dernier heure du regroupement assiné et l'arrivée des voitures
+Les voitures dispo sont les voitures dispos entre la 1ere heure du regroupement jusqu'à la 1ere heure+TA dans ce cas le depart du groupe sera la date la plus recente entre le dernier heure du regroupement et l'arrivée des voitures
 
 
 
