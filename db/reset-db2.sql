@@ -9,6 +9,7 @@
 -- 1. SUPPRESSION DES TABLES (ordre inverse des dépendances)
 -- ========================================= 
 DROP VIEW IF EXISTS v_historique_assignation CASCADE;
+DROP TABLE IF EXISTS reservation_vehicule CASCADE;
 DROP TABLE IF EXISTS reservation CASCADE;
 DROP TABLE IF EXISTS distance CASCADE;
 DROP TABLE IF EXISTS lieu CASCADE;
@@ -69,6 +70,18 @@ CREATE TABLE reservation (
     id_vehicule INTEGER,
     CONSTRAINT fk_hotel FOREIGN KEY (id_hotel) REFERENCES hotel(id_hotel),
     CONSTRAINT fk_vehicule FOREIGN KEY (id_vehicule) REFERENCES vehicule(id)
+);
+
+-- TABLE RESERVATION_VEHICULE (journal des assignations)
+CREATE TABLE reservation_vehicule (
+    id SERIAL PRIMARY KEY,
+    reservation_id INTEGER NOT NULL,
+    vehicule_id INTEGER NOT NULL,
+    nb_passagers INTEGER NOT NULL CHECK (nb_passagers > 0),
+    date_assignation TIMESTAMP NOT NULL DEFAULT NOW(),
+    CONSTRAINT fk_rv_reservation FOREIGN KEY (reservation_id) REFERENCES reservation(id) ON DELETE CASCADE,
+    CONSTRAINT fk_rv_vehicule FOREIGN KEY (vehicule_id) REFERENCES vehicule(id),
+    CONSTRAINT uq_rv UNIQUE (reservation_id, vehicule_id)
 );
 
 -- TABLE TOKEN
