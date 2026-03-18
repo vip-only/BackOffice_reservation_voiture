@@ -113,6 +113,12 @@ public class PlanificationService {
     public List<Reservation> getReservationsSansVehicule(Date date) throws SQLException {
         return reservationDAO.findWithoutVehiculeByDate(date);
     }
+       public List<Reservation> getReservationsAll(Date date) throws SQLException {
+        return reservationDAO.getReservations(date);
+    }
+    
+    /* R0 tri des reservations du groupe par ordre descroissant du nombre de passager 
+     */
     
     /**
      * Assigner automatiquement les véhicules aux réservations sans véhicule.
@@ -199,85 +205,57 @@ public class PlanificationService {
      * heureDepart = MAX(arrivées du groupe) utilisé pour la vérification de disponibilité.
      */
     private void assignerGroupeReservations(List<Reservation> groupe, Timestamp heureDepart) throws SQLException {
-        if (groupe.isEmpty()) {
+        if (groupe == null || groupe.isEmpty()) {
             return;
         }
-        
-        // Trouver l'hôtel le plus éloigné pour estimer le temps de retour du véhicule
+
         int idHotelPlusLoin = trouverHotelPlusLoin(groupe);
-        
-        // Véhicules disponibles à l'heure de départ effective du groupe (MAX arrivées)
         List<Vehicule> vehiculesDisponibles = reservationService.getVehiculesDisponibles(heureDepart, idHotelPlusLoin);
-        
+
         Map<Integer, Integer> placesRestantes = new HashMap<>();
         Map<Integer, Vehicule> vehiculesMap = new HashMap<>();
         Map<Integer, List<Reservation>> reservationsParVehicule = new HashMap<>();
-        
-        for (Reservation r : groupe) {
+
+        for (int i = 0; i < groupe.size(); i++) {
+            Reservation r = groupe.get(i);
             int nbPax = r.getNombrePassager();
-            
-            Vehicule meilleur = null;
-            int meilleureCapaRestante = Integer.MAX_VALUE;
-            
-            // 1. Véhicules déjà utilisés dans ce groupe (places restantes)
-            for (Map.Entry<Integer, Integer> entry : placesRestantes.entrySet()) {
-                int vehId = entry.getKey();
-                int reste = entry.getValue();
-                if (reste >= nbPax) {
-                    if (reste < meilleureCapaRestante) {
-                        meilleureCapaRestante = reste;
-                        meilleur = vehiculesMap.get(vehId);
-                    } else if (reste == meilleureCapaRestante && meilleur != null) {
-                        Vehicule candidat = vehiculesMap.get(vehId);
-                        // Préférence Diesel en cas d'égalité
-                        if ("D".equals(candidat.getTypeCarburant()) && !"D".equals(meilleur.getTypeCarburant())) {
-                            meilleur = candidat;
-                        }
-                    }
-                }
+
+            // R1a: priorite absolue aux vehicules deja assignes dans le groupe
+            Vehicule meilleur = choisirVehiculeDejaAssigneR1a(nbPax, placesRestantes, vehiculesMap);
+
+            // Si aucun vehicule deja assigne ne peut absorber, on cherche un nouveau vehicule
+            if (meilleur == null) {
+                meilleur = choisirNouveauVehiculeDisponibleAnticipatif(
+                    nbPax, groupe, i, vehiculesDisponibles, placesRestantes
+                );
             }
-            
-            // 2. Véhicules disponibles pas encore utilisés dans ce groupe
-            for (Vehicule v : vehiculesDisponibles) {
-                if (placesRestantes.containsKey(v.getId())) {
-                    continue; // Déjà pris en compte ci-dessus
-                }
-                int capacite = v.getNombrePlace();
-                if (capacite >= nbPax) {
-                    if (capacite < meilleureCapaRestante) {
-                        meilleureCapaRestante = capacite;
-                        meilleur = v;
-                    } else if (capacite == meilleureCapaRestante && meilleur != null) {
-                        // Préférence Diesel en cas d'égalité
-                        if ("D".equals(v.getTypeCarburant()) && !"D".equals(meilleur.getTypeCarburant())) {
-                            meilleur = v;
-                        }
-                    }
-                }
+
+            if (meilleur == null) {
+                // Aucune solution pour cette reservation
+                continue;
             }
-            
-            if (meilleur != null) {
-                int vehId = meilleur.getId();
-                if (!placesRestantes.containsKey(vehId)) {
-                    placesRestantes.put(vehId, meilleur.getNombrePlace() - nbPax);
-                    vehiculesMap.put(vehId, meilleur);
-                    List<Reservation> liste = new ArrayList<>();
-                    liste.add(r);
-                    reservationsParVehicule.put(vehId, liste);
-                } else {
-                    placesRestantes.put(vehId, placesRestantes.get(vehId) - nbPax);
-                    reservationsParVehicule.get(vehId).add(r);
-                }
+
+            int vehId = meilleur.getId();
+
+            if (!placesRestantes.containsKey(vehId)) {
+                placesRestantes.put(vehId, meilleur.getNombrePlace() - nbPax);
+                vehiculesMap.put(vehId, meilleur);
+
+                List<Reservation> liste = new ArrayList<>();
+                liste.add(r);
+                reservationsParVehicule.put(vehId, liste);
+            } else {
+                placesRestantes.put(vehId, placesRestantes.get(vehId) - nbPax);
+                reservationsParVehicule.get(vehId).add(r);
             }
-            // Si meilleur == null : aucun véhicule disponible, réservation reste sans véhicule
         }
-        
-        // Nearest-neighbour + enregistrement en base
+
+        // Persistance finale
         for (Map.Entry<Integer, List<Reservation>> entry : reservationsParVehicule.entrySet()) {
             int vehId = entry.getKey();
             List<Reservation> sousGroupe = entry.getValue();
             List<Reservation> ordreDepose = calculerOrdreDepose(sousGroupe);
-            
+
             for (Reservation r : ordreDepose) {
                 reservationDAO.assignVehicule(r.getId(), vehId);
                 r.setIdVehicule(vehId);
@@ -285,6 +263,112 @@ public class PlanificationService {
         }
     }
 
+    private Vehicule choisirVehiculeDejaAssigneR1a(
+        int nbPax,
+        Map<Integer, Integer> placesRestantes,
+        Map<Integer, Vehicule> vehiculesMap
+    ) {
+        Vehicule meilleur = null;
+        int meilleureMarge = Integer.MAX_VALUE;
+
+        for (Map.Entry<Integer, Integer> entry : placesRestantes.entrySet()) {
+            int vehId = entry.getKey();
+            int reste = entry.getValue();
+
+            if (reste < nbPax) {
+                continue;
+            }
+
+            Vehicule candidat = vehiculesMap.get(vehId);
+            if (candidat == null) {
+                continue;
+            }
+
+            // R1c: minimiser le gaspillage de places
+            if (reste < meilleureMarge) {
+                meilleureMarge = reste;
+                meilleur = candidat;
+                continue;
+            }
+
+            // R1d: egalite -> Diesel puis id le plus petit
+            if (reste == meilleureMarge && meilleur != null) {
+                boolean candidatDiesel = "D".equals(candidat.getTypeCarburant());
+                boolean meilleurDiesel = "D".equals(meilleur.getTypeCarburant());
+
+                if (candidatDiesel && !meilleurDiesel) {
+                    meilleur = candidat;
+                } else if (candidatDiesel == meilleurDiesel && candidat.getId() < meilleur.getId()) {
+                    meilleur = candidat;
+                }
+            }
+        }
+
+        return meilleur;
+    }
+
+    private Vehicule choisirNouveauVehiculeDisponibleAnticipatif(
+        int nbPax,
+        List<Reservation> groupe,
+        int indexCourant,
+        List<Vehicule> vehiculesDisponibles,
+        Map<Integer, Integer> placesRestantes
+    ) {
+        Vehicule meilleur = null;
+        int meilleurNbAbsorbables = -1;
+        int meilleureMarge = Integer.MAX_VALUE;
+
+        for (Vehicule v : vehiculesDisponibles) {
+            if (placesRestantes.containsKey(v.getId())) {
+                continue; // deja utilise dans ce groupe
+            }
+
+            int capacite = v.getNombrePlace();
+            if (capacite < nbPax) {
+                continue;
+            }
+
+            int marge = capacite - nbPax;
+
+            // Anticipation: combien de reservations suivantes pourraient tenir dans cette marge
+            int nbAbsorbables = 0;
+            for (int j = indexCourant + 1; j < groupe.size(); j++) {
+                if (groupe.get(j).getNombrePassager() <= marge) {
+                    nbAbsorbables++;
+                }
+            }
+
+            if (nbAbsorbables > meilleurNbAbsorbables) {
+                meilleurNbAbsorbables = nbAbsorbables;
+                meilleureMarge = marge;
+                meilleur = v;
+                continue;
+            }
+
+            if (nbAbsorbables == meilleurNbAbsorbables) {
+                // R1c: a egalite d'anticipation, on minimise la marge
+                if (marge < meilleureMarge) {
+                    meilleureMarge = marge;
+                    meilleur = v;
+                    continue;
+                }
+
+                // R1d: a egalite, preference Diesel puis id
+                if (marge == meilleureMarge && meilleur != null) {
+                    boolean vDiesel = "D".equals(v.getTypeCarburant());
+                    boolean meilleurDiesel = "D".equals(meilleur.getTypeCarburant());
+
+                    if (vDiesel && !meilleurDiesel) {
+                        meilleur = v;
+                    } else if (vDiesel == meilleurDiesel && v.getId() < meilleur.getId()) {
+                        meilleur = v;
+                    }
+                }
+            }
+        }
+
+        return meilleur;
+    }
     /**
      * Construit les groupes de réservations pour une date donnée.
      * Regroupe par fenêtre TA D'ABORD (toutes réservations confondues),
@@ -498,90 +582,160 @@ public class PlanificationService {
      * Départ depuis TNR, à chaque étape on va vers l'hôtel le plus proche.
      * Départage alphabétique si même distance.
      */
-    private List<Reservation> calculerOrdreDepose(List<Reservation> reservations) throws SQLException {
-        if (reservations.size() <= 1) {
-            return new ArrayList<>(reservations);
-        }
-        
-        Map<String, Double> distances = getAllDistances(reservations);
-        List<Reservation> restantes = new ArrayList<>(reservations);
-        List<Reservation> ordre = new ArrayList<>();
-        String positionActuelle = "TNR";
-        
-        while (!restantes.isEmpty()) {
-            Reservation plusProche = null;
-            double minDist = Double.MAX_VALUE;
-            
-            for (Reservation r : restantes) {
-                String key = positionActuelle + "-" + r.getIdHotel();
-                double dist = distances.getOrDefault(key, Double.MAX_VALUE);
-                if (dist < minDist) {
-                    minDist = dist;
-                    plusProche = r;
-                } else if (dist == minDist && plusProche != null) {
-                    // Départage alphabétique par nom d'hôtel
-                    if (r.getNomHotel().compareTo(plusProche.getNomHotel()) < 0) {
-                        plusProche = r;
-                    }
-                }
-            }
-            
-            if (plusProche != null) {
-                ordre.add(plusProche);
-                restantes.remove(plusProche);
-                positionActuelle = String.valueOf(plusProche.getIdHotel());
-            } else {
-                break;
-            }
-        }
-        
-        return ordre;
+   private List<Reservation> calculerOrdreDepose(List<Reservation> reservations) throws SQLException {
+    if (reservations.size() <= 1) {
+        return new ArrayList<>(reservations);
     }
 
+    Map<String, Double> distances = getAllDistances(reservations);
+    List<Reservation> restantes = new ArrayList<>(reservations);
+    List<Reservation> ordre = new ArrayList<>();
+    String positionActuelle = "TNR";
+
+    while (!restantes.isEmpty()) {
+        Reservation plusProche = null;
+        double minDist = Double.MAX_VALUE;
+
+        for (Reservation r : restantes) {
+            String hotelCible = String.valueOf(r.getIdHotel());
+            double dist;
+
+            // Meme hotel => distance nulle
+            if (positionActuelle.equals(hotelCible)) {
+                dist = 0.0;
+            } else {
+                String key = positionActuelle + "-" + hotelCible;
+                String reverseKey = hotelCible + "-" + positionActuelle;
+
+                // Fallback sur sens inverse si la distance directe manque
+                dist = distances.getOrDefault(key, distances.getOrDefault(reverseKey, Double.MAX_VALUE));
+            }
+
+            // Important: accepter le 1er candidat meme si dist == Double.MAX_VALUE
+            if (plusProche == null || dist < minDist) {
+                minDist = dist;
+                plusProche = r;
+            } else if (dist == minDist) {
+                String nomR = r.getNomHotel() == null ? "" : r.getNomHotel();
+                String nomP = plusProche.getNomHotel() == null ? "" : plusProche.getNomHotel();
+
+                if (nomR.compareTo(nomP) < 0) {
+                    plusProche = r;
+                }
+            }
+        }
+
+        if (plusProche == null) {
+            break;
+        }
+
+        ordre.add(plusProche);
+        restantes.remove(plusProche);
+        positionActuelle = String.valueOf(plusProche.getIdHotel());
+    }
+
+    // Filet de securite: ne jamais perdre de reservation
+    if (!restantes.isEmpty()) {
+        ordre.addAll(restantes);
+    }
+
+    return ordre;
+}
     /**
      * Récupère toutes les distances nécessaires pour le calcul d'itinéraire.
      * TNR → chaque hôtel + inter-hôtels (dans les deux sens).
      */
-    private Map<String, Double> getAllDistances(List<Reservation> reservations) throws SQLException {
-        Map<String, Double> distances = new HashMap<>();
-        Set<Integer> hotelIds = new HashSet<>();
-        for (Reservation r : reservations) {
-            hotelIds.add(r.getIdHotel());
-        }
+    // private Map<String, Double> getAllDistances(List<Reservation> reservations) throws SQLException {
+    //     Map<String, Double> distances = new HashMap<>();
+    //     Set<Integer> hotelIds = new HashSet<>();
+    //     for (Reservation r : reservations) {
+    //         hotelIds.add(r.getIdHotel());
+    //     }
         
-        // TNR → hôtels
-        String sql = "SELECT from_id, to_id, kilometer FROM distance WHERE from_id = 'TNR' AND to_id = ANY(?)";
-        try (Connection conn = DBConnection.getConnection()) {
-            String[] ids = new String[hotelIds.size()];
-            int i = 0;
-            for (int id : hotelIds) {
-                ids[i++] = String.valueOf(id);
-            }
+    //     // TNR → hôtels
+    //     String sql = "SELECT from_id, to_id, kilometer FROM distance WHERE from_id = 'TNR' AND to_id = ANY(?)";
+    //     try (Connection conn = DBConnection.getConnection()) {
+    //         String[] ids = new String[hotelIds.size()];
+    //         int i = 0;
+    //         for (int id : hotelIds) {
+    //             ids[i++] = String.valueOf(id);
+    //         }
             
-            try (PreparedStatement ps = conn.prepareStatement(sql)) {
-                ps.setArray(1, conn.createArrayOf("VARCHAR", ids));
-                try (ResultSet rs = ps.executeQuery()) {
-                    while (rs.next()) {
-                        String key = rs.getString("from_id") + "-" + rs.getString("to_id");
-                        distances.put(key, rs.getDouble("kilometer"));
-                    }
-                }
-            }
+    //         try (PreparedStatement ps = conn.prepareStatement(sql)) {
+    //             ps.setArray(1, conn.createArrayOf("VARCHAR", ids));
+    //             try (ResultSet rs = ps.executeQuery()) {
+    //                 while (rs.next()) {
+    //                     String key = rs.getString("from_id") + "-" + rs.getString("to_id");
+    //                     distances.put(key, rs.getDouble("kilometer"));
+    //                 }
+    //             }
+    //         }
             
-            // Inter-hôtels (les deux directions)
-            String sql2 = "SELECT from_id, to_id, kilometer FROM distance WHERE from_id = ANY(?) AND to_id = ANY(?)";
-            try (PreparedStatement ps2 = conn.prepareStatement(sql2)) {
-                ps2.setArray(1, conn.createArrayOf("VARCHAR", ids));
-                ps2.setArray(2, conn.createArrayOf("VARCHAR", ids));
-                try (ResultSet rs = ps2.executeQuery()) {
-                    while (rs.next()) {
-                        String key = rs.getString("from_id") + "-" + rs.getString("to_id");
-                        distances.put(key, rs.getDouble("kilometer"));
-                    }
-                }
-            }
-        }
+    //         // Inter-hôtels (les deux directions)
+    //         String sql2 = "SELECT from_id, to_id, kilometer FROM distance WHERE from_id = ANY(?) AND to_id = ANY(?)";
+    //         try (PreparedStatement ps2 = conn.prepareStatement(sql2)) {
+    //             ps2.setArray(1, conn.createArrayOf("VARCHAR", ids));
+    //             ps2.setArray(2, conn.createArrayOf("VARCHAR", ids));
+    //             try (ResultSet rs = ps2.executeQuery()) {
+    //                 while (rs.next()) {
+    //                     String key = rs.getString("from_id") + "-" + rs.getString("to_id");
+    //                     distances.put(key, rs.getDouble("kilometer"));
+    //                 }
+    //             }
+    //         }
+    //     }
         
-        return distances;
+    //     // Ajouter explicitement les distances identite hotel->hotel = 0
+    //     for (String id : ids) {
+    //         distances.put(id + "-" + id, 0.0);
+    //     }
+    //     distances.put("TNR-TNR", 0.0);
+    // }
+private Map<String, Double> getAllDistances(List<Reservation> reservations) throws SQLException {
+    Map<String, Double> distances = new HashMap<>();
+    Set<Integer> hotelIds = new HashSet<>();
+    for (Reservation r : reservations) {
+        hotelIds.add(r.getIdHotel());
     }
+
+    String sql = "SELECT from_id, to_id, kilometer FROM distance WHERE from_id = 'TNR' AND to_id = ANY(?)";
+
+    try (Connection conn = DBConnection.getConnection()) {
+        String[] ids = new String[hotelIds.size()];
+        int i = 0;
+        for (int id : hotelIds) {
+            ids[i++] = String.valueOf(id);
+        }
+
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setArray(1, conn.createArrayOf("VARCHAR", ids));
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    String key = rs.getString("from_id") + "-" + rs.getString("to_id");
+                    distances.put(key, rs.getDouble("kilometer"));
+                }
+            }
+        }
+
+        String sql2 = "SELECT from_id, to_id, kilometer FROM distance WHERE from_id = ANY(?) AND to_id = ANY(?)";
+        try (PreparedStatement ps2 = conn.prepareStatement(sql2)) {
+            ps2.setArray(1, conn.createArrayOf("VARCHAR", ids));
+            ps2.setArray(2, conn.createArrayOf("VARCHAR", ids));
+            try (ResultSet rs = ps2.executeQuery()) {
+                while (rs.next()) {
+                    String key = rs.getString("from_id") + "-" + rs.getString("to_id");
+                    distances.put(key, rs.getDouble("kilometer"));
+                }
+            }
+        }
+
+        // Ajouter explicitement les distances identite hotel->hotel = 0
+        for (String id : ids) {
+            distances.put(id + "-" + id, 0.0);
+        }
+        distances.put("TNR-TNR", 0.0);
+    }
+
+    return distances;
+}
 }

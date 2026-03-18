@@ -231,4 +231,76 @@ public class ReservationDAO {
         
         return res;
     }
+
+
+
+    /* R0 select * from reservation order by nombre_passager desc; */
+    public List<Reservation> getReservations(java.sql.Date date) throws SQLException {
+        List<Reservation> reservations = new ArrayList<>();
+        String sql = "SELECT r.id, r.client, r.nombre_passager, r.date_heure_arrivee, r.id_hotel, r.id_vehicule, " +
+                     "h.nom AS nom_hotel " +
+                     "FROM reservation r " +
+                     "JOIN hotel h ON r.id_hotel = h.id_hotel " +
+                     "WHERE DATE(r.date_heure_arrivee) = ? " +
+                     "ORDER BY r.nombre_passager DESC";
+
+        try (Connection conn = DBConnection.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setDate(1, date);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    Reservation res = mapResultSet(rs);
+                    reservations.add(res);
+                }
+            }
+        }
+        return reservations;
+    }
+    /* R1 get vehicules assigne */
+    //  public List<Reservation> getReservationsDejaAssigne(java.sql.Date date) throws SQLException {
+    //     List<Reservation> reservations = new ArrayList<>();
+    //     String sql = "SELECT r.id, r.client, r.nombre_passager, r.date_heure_arrivee, r.id_hotel, r.id_vehicule, " +
+    //                  "h.nom AS nom_hotel " +
+    //                  "FROM reservation r " +
+    //                  "JOIN hotel h ON r.id_hotel = h.id_hotel " +
+    //                  "WHERE id_vehicule IS NOT NULL AND DATE(r.date_heure_arrivee) = ? " +
+    //                  "ORDER BY r.n ombre_passager DESC";
+
+    //     try (Connection conn = DBConnection.getConnection();
+    //          PreparedStatement ps = conn.prepareStatement(sql)) {
+    //         ps.setDate(1, date);
+    //         try (ResultSet rs = ps.executeQuery()) {
+    //             while (rs.next()) {
+    //                 Reservation res = mapResultSet(rs);
+    //                 reservations.add(res);
+    //             }
+    //         }
+    //     }
+    //     return reservations;
+    // }
+    // DAO - remplace la méthode getReservationsDejaAssigne(...)
+public List<Reservation> getReservationsDejaAssigne(java.sql.Date date) throws SQLException {
+    List<Reservation> reservations = new ArrayList<>();
+    String sql =
+        "SELECT r.id, r.client, r.nombre_passager, r.date_heure_arrivee, r.id_hotel, r.id_vehicule, " +
+        "       h.nom AS nom_hotel, v.reference AS reference_vehicule " +
+        "FROM reservation r " +
+        "JOIN hotel h ON r.id_hotel = h.id_hotel " +
+        "JOIN vehicule v ON r.id_vehicule = v.id " +
+        "WHERE r.id_vehicule IS NOT NULL " +
+        "  AND DATE(r.date_heure_arrivee) = ? " +
+        "ORDER BY r.nombre_passager DESC, r.date_heure_arrivee ASC";
+
+    try (Connection conn = DBConnection.getConnection();
+         PreparedStatement ps = conn.prepareStatement(sql)) {
+        ps.setDate(1, date);
+
+        try (ResultSet rs = ps.executeQuery()) {
+            while (rs.next()) {
+                reservations.add(mapResultSet(rs));
+            }
+        }
+    }
+    return reservations;
+}
 }

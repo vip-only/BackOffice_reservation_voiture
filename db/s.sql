@@ -110,7 +110,7 @@ INSERT INTO parametre (cle, valeur, unite) VALUES
 
 -- Distances depuis TNR (aeroport)
 INSERT INTO distance (from_id, to_id, kilometer) VALUES 
-    ('TNR', '1', 50.0),   -- TNR -> Colbert: 15 km
+    ('TNR', '1', 50.0);  -- TNR -> Colbert: 15 km
     -- ('TNR', '2', 22.5),   -- TNR -> Novotel: 22.5 km
     -- ('TNR', '3', 18.0),   -- TNR -> Ibis: 18 km
     -- ('TNR', '4', 30.0),   -- TNR -> Lokanga: 30 km
@@ -377,7 +377,7 @@ INSERT INTO reservation (client, nombre_passager, date_heure_arrivee, id_hotel) 
     ('Client2', 11, '2026-03-12 09:00:00', 1);
 
 INSERT INTO reservation (client, nombre_passager, date_heure_arrivee, id_hotel) VALUES
-    ('Client3', 3, '2026-03-12 09:00:00', 1);
+    ('Client3', 3, '2026-03-12 09:10:00', 1);
 
 INSERT INTO reservation (client, nombre_passager, date_heure_arrivee, id_hotel) VALUES
     ('Client4', 1, '2026-03-12 09:00:00', 1);
