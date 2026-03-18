@@ -166,4 +166,31 @@ public class ReservationService {
         }
         return null;
     }
+
+    /**
+     * Retourne la prochaine heure de retour d'un vehicule capable (capacite >= nbPassagers)
+     * apres une heure donnee.
+     */
+    public Timestamp getProchaineDisponibiliteVehiculeCapable(int nbPassagers, Timestamp afterTime) throws SQLException {
+        String sql =
+            "SELECT MIN(ha.date_heure_retour) AS prochaine_disponibilite " +
+            "FROM v_historique_assignation ha " +
+            "JOIN vehicule v ON ha.vehicule_id = v.id " +
+            "WHERE v.nombre_place >= ? " +
+            "AND ha.date_heure_retour > ?";
+
+        try (Connection conn = DBConnection.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setInt(1, nbPassagers);
+            ps.setTimestamp(2, afterTime);
+
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    return rs.getTimestamp("prochaine_disponibilite");
+                }
+            }
+        }
+
+        return null;
+    }
 }

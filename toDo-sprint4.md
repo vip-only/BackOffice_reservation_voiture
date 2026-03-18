@@ -20,7 +20,7 @@ Améliorer l'algorithme d'affectation pour :
 ### Contraintes / Règles métiers
 1. Une voiture ne doit jamais être surchargée (capacité >= total passagers affectés).
 2. Pour une même arrivée (même timestamp), regrouper autant que possible dans une voiture avant d'en utiliser une autre.
-3. Lors du regroupement avec plusieurs hôtels, choisir l'ordre de dépose qui minimise la distance totale (approx. nearest-neighbour à partir du lieu de départ).
+3. Lors du regroupement avec plusieurs hôtels, choisir l'ordre de dépose qui minimise la distance totale (approx. nearest-  à partir du lieu de départ).
 4. Choisir la voiture dont la capacité est la plus proche (la plus petite capacité satisfaisante).
 5. En cas d'égalité de capacité candidate, préférer véhicule Diesel.
 6. Toujours assigner d'abord les réservations avec le plus grand nombre de passagers.

@@ -33,7 +33,7 @@ public class PlanificationController {
             }
             
             List<PlanificationReservation> planifications = planificationService.getPlanificationsByDate(date);
-            List<Reservation> reservationsSansVehicule = planificationService.getReservationsSansVehicule(date);
+            List<Reservation> reservationsSansVehicule = planificationService.getReservationsAll(date);
             List<GroupeVehicule> groupesVehicules = planificationService.construireGroupesParVehicule(date);
             
             mv.addData("planifications", planifications);

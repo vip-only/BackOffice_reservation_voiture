@@ -6,7 +6,7 @@
 
 -- =========================================
 -- 1. SUPPRESSION DES TABLES (ordre inverse des dépendances)
--- ========================================= 
+-- =========================================
 DROP VIEW IF EXISTS v_historique_assignation CASCADE;
 DROP TABLE IF EXISTS reservation CASCADE;
 DROP TABLE IF EXISTS distance CASCADE;
@@ -87,12 +87,12 @@ CREATE INDEX idx_token_expiration ON token(date_heure_expiration);
 
 -- Hotels
 INSERT INTO hotel (nom) VALUES 
-    ('Colbert'),      -- id=1
-    ('Novotel'),      -- id=2
-    ('Ibis'),         -- id=3
-    ('Lokanga'),      -- id=4
-    ('Carlton'),      -- id=5 (même distance que Ibis pour tester départage)
-    ('Panorama');     -- id=6 (même distance que Colbert pour tester départage)
+    ('Hotel1');     -- id=1
+    -- ('Novotel'),      -- id=2
+    -- ('Ibis'),         -- id=3
+    -- ('Lokanga'),      -- id=4
+    -- ('Carlton'),      -- id=5 (même distance que Ibis pour tester départage)
+    -- ('Panorama');     -- id=6 (même distance que Colbert pour tester départage)
 
 -- Lieux (aéroports, gares, etc.)
 INSERT INTO lieu (code, libelle) VALUES 
@@ -101,7 +101,7 @@ INSERT INTO lieu (code, libelle) VALUES
 -- Paramètres
 INSERT INTO parametre (cle, valeur, unite) VALUES
     ('TA', 30, 'minutes'),              -- Temps d'attente (non utilisé dans le calcul)
-    ('VITESSE_MOYENNE', 30, 'km/h');    -- Vitesse moyenne
+    ('VITESSE_MOYENNE', 50, 'km/h');    -- Vitesse moyenne
 
 -- Distances (TNR vers chaque hotel + distances inter-hotels)
 -- from_id = 'TNR' ou id_hotel, to_id = id_hotel (en VARCHAR)
@@ -110,49 +110,46 @@ INSERT INTO parametre (cle, valeur, unite) VALUES
 
 -- Distances depuis TNR (aeroport)
 INSERT INTO distance (from_id, to_id, kilometer) VALUES 
-    ('TNR', '1', 15.0),   -- TNR -> Colbert: 15 km
-    ('TNR', '2', 22.5),   -- TNR -> Novotel: 22.5 km
-    ('TNR', '3', 18.0),   -- TNR -> Ibis: 18 km
-    ('TNR', '4', 30.0),   -- TNR -> Lokanga: 30 km
-    ('TNR', '5', 18.0),   -- TNR -> Carlton: 18 km (MEME que Ibis!)
-    ('TNR', '6', 15.0);   -- TNR -> Panorama: 15 km (MEME que Colbert!)
+    ('TNR', '1', 50.0);  -- TNR -> Colbert: 15 km
+    -- ('TNR', '2', 22.5),   -- TNR -> Novotel: 22.5 km
+    -- ('TNR', '3', 18.0),   -- TNR -> Ibis: 18 km
+    -- ('TNR', '4', 30.0),   -- TNR -> Lokanga: 30 km
+    -- ('TNR', '5', 18.0),   -- TNR -> Carlton: 18 km (MEME que Ibis!)
+    -- ('TNR', '6', 15.0);   -- TNR -> Panorama: 15 km (MEME que Colbert!)
 
 -- Distances INTER-HOTELS (pour nearest-neighbour)
 -- OPTIMISATION: Une seule entree par paire d'hotels (pas de redondance)
 -- Le code Java gere automatiquement la recherche dans les deux sens
 -- Convention: from_id < to_id (plus petit ID vers plus grand ID)
-INSERT INTO distance (from_id, to_id, kilometer) VALUES 
-    -- Depuis Colbert (1) vers hotels avec ID > 1
-    ('1', '2', 8.0),    -- Colbert <-> Novotel
-    ('1', '3', 5.0),    -- Colbert <-> Ibis
-    ('1', '4', 16.0),   -- Colbert <-> Lokanga
-    ('1', '5', 5.0),    -- Colbert <-> Carlton
-    ('1', '6', 3.0),    -- Colbert <-> Panorama (proches!)
-    -- Depuis Novotel (2) vers hotels avec ID > 2
-    ('2', '3', 6.0),    -- Novotel <-> Ibis
-    ('2', '4', 10.0),   -- Novotel <-> Lokanga
-    ('2', '5', 6.0),    -- Novotel <-> Carlton
-    ('2', '6', 9.0),    -- Novotel <-> Panorama
-    -- Depuis Ibis (3) vers hotels avec ID > 3
-    ('3', '4', 14.0),   -- Ibis <-> Lokanga
-    ('3', '5', 2.0),    -- Ibis <-> Carlton (proches!)
-    ('3', '6', 6.0),    -- Ibis <-> Panorama
-    -- Depuis Lokanga (4) vers hotels avec ID > 4
-    ('4', '5', 14.0),   -- Lokanga <-> Carlton
-    ('4', '6', 17.0),   -- Lokanga <-> Panorama
-    -- Depuis Carlton (5) vers hotels avec ID > 5
-    ('5', '6', 6.0);    -- Carlton <-> Panorama
+-- INSERT INTO distance (from_id, to_id, kilometer) VALUES 
+--     -- Depuis Colbert (1) vers hotels avec ID > 1
+--     ('1', '2', 8.0),    -- Colbert <-> Novotel
+--     ('1', '3', 5.0),    -- Colbert <-> Ibis
+--     ('1', '4', 16.0),   -- Colbert <-> Lokanga
+--     ('1', '5', 5.0),    -- Colbert <-> Carlton
+--     ('1', '6', 3.0),    -- Colbert <-> Panorama (proches!)
+--     -- Depuis Novotel (2) vers hotels avec ID > 2
+--     ('2', '3', 6.0),    -- Novotel <-> Ibis
+--     ('2', '4', 10.0),   -- Novotel <-> Lokanga
+--     ('2', '5', 6.0),    -- Novotel <-> Carlton
+--     ('2', '6', 9.0),    -- Novotel <-> Panorama
+--     -- Depuis Ibis (3) vers hotels avec ID > 3
+--     ('3', '4', 14.0),   -- Ibis <-> Lokanga
+--     ('3', '5', 2.0),    -- Ibis <-> Carlton (proches!)
+--     ('3', '6', 6.0),    -- Ibis <-> Panorama
+--     -- Depuis Lokanga (4) vers hotels avec ID > 4
+--     ('4', '5', 14.0),   -- Lokanga <-> Carlton
+--     ('4', '6', 17.0),   -- Lokanga <-> Panorama
+--     -- Depuis Carlton (5) vers hotels avec ID > 5
+--     ('5', '6', 6.0);    -- Carlton <-> Panorama
 
 -- Vehicules (tries par capacite et type carburant)
 INSERT INTO vehicule (reference, nombre_place, type_carburant) VALUES
-    ('VH-001', 4, 'ES'),    -- Petite voiture essence
-    ('VH-002', 4, 'D'),     -- Petite voiture diesel (preferee si 4 places demandees)
-    ('VH-003', 7, 'D'),     -- Monospace diesel
-    ('VH-004', 7, 'ES'),    -- Monospace essence
-    ('VH-005', 12, 'D'),    -- Minibus diesel
-    ('VH-006', 15, 'D'),    -- Bus diesel
-    ('VH-007', 20, 'D'),    -- Grand bus diesel
-    ('VH-008', 30, 'D');    -- Tres grand bus diesel
+    ('vehicule1', 12, 'D'),    -- Petite voiture essence
+    ('vehicule2', 5, 'ES'),     -- Petite voiture diesel (preferee si 4 places demandees)
+    ('vehicule3', 5, 'D'),     -- Monospace diesel
+    ('vehicule4', 12, 'ES') ; -- Monospace essence
+    -- Tres grand bus diesel
 
 
 -- =========================================
@@ -216,7 +213,7 @@ ORDER BY r.date_heure_arrivee;
 -- └─────────────┴─────────┴──────────┘
 --
 -- Véhicules (triés par capacité):
--- VH-001(4,ES), VH-002(4,D), VH-003(7,D), VH-004(7,ES),
+-- vehicule1(4,ES), VH-002(4,D), VH-003(7,D), VH-004(7,ES),
 -- VH-005(12,D), VH-006(15,D), VH-007(20,D), VH-008(30,D)
 --
 -- ═══════════════════════════════════════════════════════════════════════════
@@ -374,64 +371,79 @@ ORDER BY r.date_heure_arrivee;
 
 -- TEST 1: Regles de base (F1, F2, F3) - Diesel prefere
 INSERT INTO reservation (client, nombre_passager, date_heure_arrivee, id_hotel) VALUES
-    ('R1-Alice Martin', 3, '2026-03-11 07:00:00', 1);
-
--- TEST 2: Regroupement simple (F5, F7) - Nearest-neighbour
-INSERT INTO reservation (client, nombre_passager, date_heure_arrivee, id_hotel) VALUES
-    ('R2-Bob Dupont', 2, '2026-03-11 08:30:00', 1);
+    ('Client1', 7, '2026-03-12 09:00:00', 1);
 
 INSERT INTO reservation (client, nombre_passager, date_heure_arrivee, id_hotel) VALUES
-    ('R3-Claire Durand', 2, '2026-03-11 08:30:00', 3);
+    ('Client2', 11, '2026-03-12 09:00:00', 1);
 
 INSERT INTO reservation (client, nombre_passager, date_heure_arrivee, id_hotel) VALUES
-    ('R4-David Bernard', 2, '2026-03-11 08:30:00', 2);
-
--- TEST 3: Priorite passagers DESC (F4) - Pas de regroupement car > capacite max
-INSERT INTO reservation (client, nombre_passager, date_heure_arrivee, id_hotel) VALUES
-    ('R5-Emma Petit', 11, '2026-03-11 10:30:00', 4);
+    ('Client3', 3, '2026-03-12 09:10:00', 1);
 
 INSERT INTO reservation (client, nombre_passager, date_heure_arrivee, id_hotel) VALUES
-    ('R6-Francois Moreau', 2, '2026-03-11 10:30:00', 1);
-
--- TEST 4: Chevauchement simple (F6) - VH-005 occupe
-INSERT INTO reservation (client, nombre_passager, date_heure_arrivee, id_hotel) VALUES
-    ('R7-Gabrielle Simon', 5, '2026-03-11 12:00:00', 2);
-
--- TEST 5: Departage ALPHABETIQUE (F8) - Carlton < Ibis (meme distance 18km)
-INSERT INTO reservation (client, nombre_passager, date_heure_arrivee, id_hotel) VALUES
-    ('R8-Henri Laurent', 2, '2026-03-11 14:00:00', 5);
+    ('Client4', 1, '2026-03-12 09:00:00', 1);
 
 INSERT INTO reservation (client, nombre_passager, date_heure_arrivee, id_hotel) VALUES
-    ('R9-Isabelle Roux', 2, '2026-03-11 14:00:00', 3);
+    ('Client5', 2, '2026-03-12 09:00:00', 1);
 
 INSERT INTO reservation (client, nombre_passager, date_heure_arrivee, id_hotel) VALUES
-    ('R10-Jean Leroy', 2, '2026-03-11 14:00:00', 4);
+    ('Client6', 20, '2026-03-12 09:00:00', 1);
 
--- TEST 6: Chevauchement + Regroupement + Alphabetique (F9) - Colbert < Panorama
-INSERT INTO reservation (client, nombre_passager, date_heure_arrivee, id_hotel) VALUES
-    ('R11-Kevin Blanc', 2, '2026-03-11 15:30:00', 1);
+-- -- TEST 2: Regroupement simple (F5, F7) - Nearest-neighbour
+-- INSERT INTO reservation (client, nombre_passager, date_heure_arrivee, id_hotel) VALUES
+--     ('R2-Bob Dupont', 2, '2026-03-11 08:30:00', 1);
 
-INSERT INTO reservation (client, nombre_passager, date_heure_arrivee, id_hotel) VALUES
-    ('R12-Lucie Mercier', 2, '2026-03-11 15:30:00', 6);
+-- INSERT INTO reservation (client, nombre_passager, date_heure_arrivee, id_hotel) VALUES
+--     ('R3-Claire Durand', 2, '2026-03-11 08:30:00', 3);
 
--- TEST 7: Vehicules petits occupes (F1, F2, F6)
-INSERT INTO reservation (client, nombre_passager, date_heure_arrivee, id_hotel) VALUES
-    ('R13-Marie Fournier', 3, '2026-03-11 16:00:00', 3);
+-- INSERT INTO reservation (client, nombre_passager, date_heure_arrivee, id_hotel) VALUES
+--     ('R4-David Bernard', 2, '2026-03-11 08:30:00', 2);
 
--- TEST 8: Regroupement capacite exacte (F5) - 7 passagers dans VH-003 (7 places)
-INSERT INTO reservation (client, nombre_passager, date_heure_arrivee, id_hotel) VALUES
-    ('R14-Nicolas Garnier', 4, '2026-03-11 18:00:00', 1);
+-- -- TEST 3: Priorite passagers DESC (F4) - Pas de regroupement car > capacite max
+-- INSERT INTO reservation (client, nombre_passager, date_heure_arrivee, id_hotel) VALUES
+--     ('R5-Emma Petit', 11, '2026-03-11 10:30:00', 4);
 
-INSERT INTO reservation (client, nombre_passager, date_heure_arrivee, id_hotel) VALUES
-    ('R15-Olivier Perrin', 3, '2026-03-11 18:00:00', 2);
+-- INSERT INTO reservation (client, nombre_passager, date_heure_arrivee, id_hotel) VALUES
+--     ('R6-Francois Moreau', 2, '2026-03-11 10:30:00', 1);
+
+-- -- TEST 4: Chevauchement simple (F6) - VH-005 occupe
+-- INSERT INTO reservation (client, nombre_passager, date_heure_arrivee, id_hotel) VALUES
+--     ('R7-Gabrielle Simon', 5, '2026-03-11 12:00:00', 2);
+
+-- -- TEST 5: Departage ALPHABETIQUE (F8) - Carlton < Ibis (meme distance 18km)
+-- INSERT INTO reservation (client, nombre_passager, date_heure_arrivee, id_hotel) VALUES
+--     ('R8-Henri Laurent', 2, '2026-03-11 14:00:00', 5);
+
+-- INSERT INTO reservation (client, nombre_passager, date_heure_arrivee, id_hotel) VALUES
+--     ('R9-Isabelle Roux', 2, '2026-03-11 14:00:00', 3);
+
+-- INSERT INTO reservation (client, nombre_passager, date_heure_arrivee, id_hotel) VALUES
+--     ('R10-Jean Leroy', 2, '2026-03-11 14:00:00', 4);
+
+-- -- TEST 6: Chevauchement + Regroupement + Alphabetique (F9) - Colbert < Panorama
+-- INSERT INTO reservation (client, nombre_passager, date_heure_arrivee, id_hotel) VALUES
+--     ('R11-Kevin Blanc', 2, '2026-03-11 15:30:00', 1);
+
+-- INSERT INTO reservation (client, nombre_passager, date_heure_arrivee, id_hotel) VALUES
+--     ('R12-Lucie Mercier', 2, '2026-03-11 15:30:00', 6);
+
+-- -- TEST 7: Vehicules petits occupes (F1, F2, F6)
+-- INSERT INTO reservation (client, nombre_passager, date_heure_arrivee, id_hotel) VALUES
+--     ('R13-Marie Fournier', 3, '2026-03-11 16:00:00', 3);
+
+-- -- TEST 8: Regroupement capacite exacte (F5) - 7 passagers dans VH-003 (7 places)
+-- INSERT INTO reservation (client, nombre_passager, date_heure_arrivee, id_hotel) VALUES
+--     ('R14-Nicolas Garnier', 4, '2026-03-11 18:00:00', 1);
+
+-- INSERT INTO reservation (client, nombre_passager, date_heure_arrivee, id_hotel) VALUES
+--     ('R15-Olivier Perrin', 3, '2026-03-11 18:00:00', 2);
 
 
--- =========================================
--- 7. VERIFICATION (après assignation)
--- =========================================
--- SELECT 
---     reservation_id, client, nombre_passager,
---     date_heure_arrivee, hotel, vehicule,
---     distance_km, duree_totale_minutes || ' min' AS duree_trajet
--- FROM v_historique_assignation
--- ORDER BY date_heure_arrivee, hotel;
+-- -- =========================================
+-- -- 7. VERIFICATION (après assignation)
+-- -- =========================================
+-- -- SELECT 
+-- --     reservation_id, client, nombre_passager,
+-- --     date_heure_arrivee, hotel, vehicule,
+-- --     distance_km, duree_totale_minutes || ' min' AS duree_trajet
+-- -- FROM v_historique_assignation
+-- -- ORDER BY date_heure_arrivee, hotel;

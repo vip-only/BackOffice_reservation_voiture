@@ -5,6 +5,7 @@
 <%@ page import="com.backoffice.model.GroupeVehicule" %>
 <%@ page import="com.backoffice.model.GroupeVehicule.EtapeItineraire" %>
 <%@ page import="com.backoffice.model.Vehicule" %>
+<%@ page import="java.sql.Timestamp" %>
 <%@ page import="java.text.SimpleDateFormat" %>
 <!DOCTYPE html>
 <html lang="fr">
@@ -161,109 +162,157 @@
             <strong>Date sélectionnée :</strong> <%= request.getAttribute("dateSelectionnee") != null ? request.getAttribute("dateSelectionnee") : "Aucune" %>
         </div>
 
-        <!-- ===================== SECTION: Itinéraires par véhicule ===================== -->
-        <h2>Itinéraires par véhicule</h2>
+        <!-- ===================== SECTION: Regroupements par départ ===================== -->
+        <h2>Regroupements par départ</h2>
         <%
             SimpleDateFormat dtFormat = new SimpleDateFormat("dd/MM/yyyy HH:mm");
-            List<GroupeVehicule> groupesVehicules = (List<GroupeVehicule>) request.getAttribute("groupesVehicules");
+            SimpleDateFormat heureFormat = new SimpleDateFormat("HH:mm");
+            java.util.List groupesVehicules = (java.util.List) request.getAttribute("groupesVehicules");
 
             if (groupesVehicules != null && !groupesVehicules.isEmpty()) {
-                for (GroupeVehicule groupe : groupesVehicules) {
-                    Vehicule veh = groupe.getVehicule();
-                    String typeCarb = veh.getTypeCarburant();
-                    String badgeCl = ""; String typeLbl = "";
-                    if (typeCarb != null) {
-                        switch (typeCarb) {
-                            case "D":  badgeCl = "badge-diesel";     typeLbl = "Diesel";     break;
-                            case "ES": badgeCl = "badge-essence";    typeLbl = "Essence";    break;
-                            case "H":  badgeCl = "badge-hybride";    typeLbl = "Hybride";    break;
-                            case "EL": badgeCl = "badge-electrique"; typeLbl = "Électrique"; break;
-                            default:   typeLbl = typeCarb;
-                        }
+                // Regrouper les GroupeVehicule par heure de départ (fenêtre TA)
+                java.util.LinkedHashMap parDepart = new java.util.LinkedHashMap();
+                for (int gi = 0; gi < groupesVehicules.size(); gi++) {
+                    GroupeVehicule g = (GroupeVehicule) groupesVehicules.get(gi);
+                    String cleDep = g.getHeureDepart() != null ? dtFormat.format(g.getHeureDepart()) : "Inconnu";
+                    if (!parDepart.containsKey(cleDep)) {
+                        parDepart.put(cleDep, new java.util.ArrayList());
+                    }
+                    ((java.util.List) parDepart.get(cleDep)).add(g);
+                }
+
+                int numDepart = 0;
+                java.util.Iterator itDepart = parDepart.entrySet().iterator();
+                while (itDepart.hasNext()) {
+                    java.util.Map.Entry entry = (java.util.Map.Entry) itDepart.next();
+                    numDepart++;
+                    String heureDep = (String) entry.getKey();
+                    java.util.List vehiculesDuDepart = (java.util.List) entry.getValue();
+
+                    // Calculer totaux pour ce départ
+                    int totalPaxDepart = 0;
+                    int totalVehicules = vehiculesDuDepart.size();
+                    for (int vi = 0; vi < vehiculesDuDepart.size(); vi++) {
+                        totalPaxDepart += ((GroupeVehicule) vehiculesDuDepart.get(vi)).getTotalPassagers();
                     }
         %>
         <div class="vehicule-card">
-            <div class="vehicule-card-header">
-                <h3><%= veh.getReference() %></h3>
-                <div class="vehicule-meta">
-                    <span><span class="badge <%= badgeCl %>"><%= typeLbl %></span></span>
-                    <span><%= groupe.getTotalPassagers() %> / <%= veh.getNombrePlace() %> places</span>
-                    <span><%= String.format("%.1f", groupe.getDistanceTotaleKm()) %> km</span>
-                    <span><%= groupe.getDureeTotaleMinutes() %> min</span>
+            <div class="vehicule-card-header" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+                <h3 style="color: white;">DÉPART <%= numDepart %> — <%= heureDep %></h3>
+                <div class="vehicule-meta" style="color: rgba(255,255,255,0.9);">
+                    <span><%= totalPaxDepart %> passager(s)</span>
+                    <span><%= totalVehicules %> véhicule(s)</span>
                 </div>
             </div>
             <div class="vehicule-card-body">
-                <!-- Passagers -->
+                <!-- Tous les passagers de ce départ -->
                 <div class="passagers-section">
-                    <h4>Passagers embarqués :</h4>
+                    <h4>Passagers regroupés :</h4>
                     <table>
-                        <thead><tr><th>Client</th><th>Passagers</th><th>Hôtel destination</th></tr></thead>
+                        <thead><tr><th>Client</th><th>Passagers</th><th>Hôtel destination</th><th>Heure vol</th><th>Attente</th><th>Véhicule</th></tr></thead>
                         <tbody>
-                        <% for (Reservation res : groupe.getReservations()) { %>
+                        <%
+                            Timestamp departCommun = ((GroupeVehicule) vehiculesDuDepart.get(0)).getHeureDepart();
+                            for (int vi = 0; vi < vehiculesDuDepart.size(); vi++) {
+                                GroupeVehicule gv = (GroupeVehicule) vehiculesDuDepart.get(vi);
+                                for (int ri = 0; ri < gv.getReservations().size(); ri++) {
+                                    Reservation res = (Reservation) gv.getReservations().get(ri);
+                                    long attenteMin = 0;
+                                    if (departCommun != null && res.getDateHeureArrivee() != null) {
+                                        attenteMin = (departCommun.getTime() - res.getDateHeureArrivee().getTime()) / 60000;
+                                    }
+                        %>
                             <tr>
                                 <td><%= res.getClient() %></td>
                                 <td><%= res.getNombrePassager() %></td>
                                 <td><%= res.getNomHotel() %></td>
+                                <td class="time-display"><%= res.getDateHeureArrivee() != null ? dtFormat.format(res.getDateHeureArrivee()) : "-" %></td>
+                                <td><%= attenteMin > 0 ? attenteMin + " min" : "0 min (départ)" %></td>
+                                <td><%= gv.getVehicule().getReference() %></td>
                             </tr>
-                        <% } %>
+                        <%      }
+                            }
+                        %>
                         </tbody>
                     </table>
                 </div>
 
-                <!-- Itinéraire timeline -->
-                <h4>Itinéraire :</h4>
-                <div class="itineraire">
+                <!-- Itinéraire par véhicule dans ce départ -->
                 <%
-                    List<EtapeItineraire> etapes = groupe.getItineraire();
-                    if (etapes != null) {
-                        for (int i = 0; i < etapes.size(); i++) {
-                            EtapeItineraire etape = etapes.get(i);
-                            boolean isRetour = (i == etapes.size() - 1);
+                    for (int vi2 = 0; vi2 < vehiculesDuDepart.size(); vi2++) {
+                        GroupeVehicule gv = (GroupeVehicule) vehiculesDuDepart.get(vi2);
+                        Vehicule veh = gv.getVehicule();
+                        String typeCarb = veh.getTypeCarburant();
+                        String badgeCl = ""; String typeLbl = "";
+                        if (typeCarb != null) {
+                            switch (typeCarb) {
+                                case "D":  badgeCl = "badge-diesel";     typeLbl = "Diesel";     break;
+                                case "ES": badgeCl = "badge-essence";    typeLbl = "Essence";    break;
+                                case "H":  badgeCl = "badge-hybride";    typeLbl = "Hybride";    break;
+                                case "EL": badgeCl = "badge-electrique"; typeLbl = "Électrique"; break;
+                                default:   typeLbl = typeCarb;
+                            }
+                        }
                 %>
-                    <div class="etape <%= isRetour ? "etape-retour" : "" %>">
-                        <div class="etape-header">
-                            <span class="etape-trajet"><%= etape.getLieuDepart() %> → <%= etape.getLieuArrivee() %></span>
-                            <span class="etape-heure"><%= etape.getHeureArrivee() != null ? dtFormat.format(etape.getHeureArrivee()) : "" %></span>
-                        </div>
-                        <div class="etape-details">
-                            <%= String.format("%.1f", etape.getDistanceKm()) %> km — <%= etape.getDureeMinutes() %> min
-                        </div>
-                        <% if (etape.getPassagersDeposes() != null && !etape.getPassagersDeposes().isEmpty()) { %>
-                        <div class="etape-passagers">
-                            Dépose : <%= String.join(", ", etape.getPassagersDeposes()) %>
-                        </div>
-                        <% } %>
-                    </div>
-                <%      }
-                    }
-                %>
-                </div>
+                <div style="border: 1px solid #e0e0e0; border-radius: 8px; padding: 15px; margin-top: 15px; background: #fafafa;">
+                    <h4 style="margin-bottom: 10px;"><%= veh.getReference() %>
+                        <span class="badge <%= badgeCl %>"><%= typeLbl %></span>
+                        — <%= gv.getTotalPassagers() %> / <%= veh.getNombrePlace() %> places
+                    </h4>
 
-                <!-- Résumé horaires -->
-                <div class="horaires-resume">
-                    <div class="horaire-item">
-                        <span class="horaire-label">Départ TNR</span>
-                        <span class="horaire-value"><%= groupe.getHeureDepart() != null ? dtFormat.format(groupe.getHeureDepart()) : "-" %></span>
+                    <div class="itineraire">
+                    <%
+                        java.util.List etapes = gv.getItineraire();
+                        if (etapes != null) {
+                            for (int i = 0; i < etapes.size(); i++) {
+                                EtapeItineraire etape = (EtapeItineraire) etapes.get(i);
+                                boolean isRetour = (i == etapes.size() - 1);
+                    %>
+                        <div class="etape <%= isRetour ? "etape-retour" : "" %>">
+                            <div class="etape-header">
+                                <span class="etape-trajet"><%= etape.getLieuDepart() %> → <%= etape.getLieuArrivee() %></span>
+                                <span class="etape-heure"><%= etape.getHeureArrivee() != null ? dtFormat.format(etape.getHeureArrivee()) : "" %></span>
+                            </div>
+                            <div class="etape-details">
+                                <%= String.format("%.1f", etape.getDistanceKm()) %> km — <%= etape.getDureeMinutes() %> min
+                            </div>
+                            <% if (etape.getPassagersDeposes() != null && !etape.getPassagersDeposes().isEmpty()) { %>
+                            <div class="etape-passagers">
+                                Dépose : <%= String.join(", ", etape.getPassagersDeposes()) %>
+                            </div>
+                            <% } %>
+                        </div>
+                    <%      }
+                        }
+                    %>
                     </div>
-                    <div class="horaire-item">
-                        <span class="horaire-label">Retour TNR</span>
-                        <span class="horaire-value retour"><%= groupe.getHeureRetour() != null ? dtFormat.format(groupe.getHeureRetour()) : "-" %></span>
-                    </div>
-                    <div class="horaire-item">
-                        <span class="horaire-label">Distance totale</span>
-                        <span class="horaire-value"><%= String.format("%.1f", groupe.getDistanceTotaleKm()) %> km</span>
-                    </div>
-                    <div class="horaire-item">
-                        <span class="horaire-label">Durée totale</span>
-                        <span class="horaire-value"><%= groupe.getDureeTotaleMinutes() %> min</span>
+
+                    <div class="horaires-resume">
+                        <div class="horaire-item">
+                            <span class="horaire-label">Départ TNR</span>
+                            <span class="horaire-value"><%= gv.getHeureDepart() != null ? dtFormat.format(gv.getHeureDepart()) : "-" %></span>
+                        </div>
+                        <div class="horaire-item">
+                            <span class="horaire-label">Retour TNR</span>
+                            <span class="horaire-value retour"><%= gv.getHeureRetour() != null ? dtFormat.format(gv.getHeureRetour()) : "-" %></span>
+                        </div>
+                        <div class="horaire-item">
+                            <span class="horaire-label">Distance</span>
+                            <span class="horaire-value"><%= String.format("%.1f", gv.getDistanceTotaleKm()) %> km</span>
+                        </div>
+                        <div class="horaire-item">
+                            <span class="horaire-label">Durée</span>
+                            <span class="horaire-value"><%= gv.getDureeTotaleMinutes() %> min</span>
+                        </div>
                     </div>
                 </div>
+                <% } %>
             </div>
         </div>
         <%  }
             } else {
         %>
-        <div class="empty-state">Aucun itinéraire pour cette date</div>
+        <div class="empty-state">Aucun regroupement pour cette date</div>
         <% } %>
 
         <!-- ===================== SECTION: Réservations planifiées (individuel) ===================== -->
@@ -278,9 +327,33 @@
             </thead>
             <tbody>
             <%
-                List<PlanificationReservation> planifications = (List<PlanificationReservation>) request.getAttribute("planifications");
+                java.util.List planifications = (java.util.List) request.getAttribute("planifications");
+                java.util.List groupesVehiculesTbl = (java.util.List) request.getAttribute("groupesVehicules");
+
+                // Mapping reservationId -> horaires groupe
+                java.util.Map depParReservation = new java.util.HashMap();
+                java.util.Map retParReservation = new java.util.HashMap();
+
+                if (groupesVehiculesTbl != null) {
+                    for (int gti = 0; gti < groupesVehiculesTbl.size(); gti++) {
+                        GroupeVehicule gvTbl = (GroupeVehicule) groupesVehiculesTbl.get(gti);
+                        java.sql.Timestamp depG = gvTbl.getHeureDepart();
+                        java.sql.Timestamp retG = gvTbl.getHeureRetour();
+
+                        java.util.List resG = gvTbl.getReservations();
+                        if (resG != null) {
+                            for (int rgi = 0; rgi < resG.size(); rgi++) {
+                                Reservation rr = (Reservation) resG.get(rgi);
+                                depParReservation.put(rr.getId(), depG);
+                                retParReservation.put(rr.getId(), retG);
+                            }
+                        }
+                    }
+                }
+
                 if (planifications != null && !planifications.isEmpty()) {
-                    for (PlanificationReservation p : planifications) {
+                    for (int pi = 0; pi < planifications.size(); pi++) {
+                        PlanificationReservation p = (PlanificationReservation) planifications.get(pi);
                         Reservation r = p.getReservation();
                         String tc = r.getTypeCarburant();
                         String bc = ""; String tl = "";
@@ -293,6 +366,11 @@
                                 default:   tl = tc;
                             }
                         }
+
+                        java.sql.Timestamp depAff = (java.sql.Timestamp) depParReservation.get(r.getId());
+                        java.sql.Timestamp retAff = (java.sql.Timestamp) retParReservation.get(r.getId());
+                        if (depAff == null) depAff = p.getHeureDepart();
+                        if (retAff == null) retAff = p.getHeureRetour();
             %>
                 <tr>
                     <td><%= r.getClient() %></td>
@@ -301,8 +379,8 @@
                     <td><%= String.format("%.1f", p.getDistanceKm()) %> km</td>
                     <td><%= r.getReferenceVehicule() %></td>
                     <td><span class="badge <%= bc %>"><%= tl %></span></td>
-                    <td class="time-display"><%= dtFormat.format(p.getHeureDepart()) %></td>
-                    <td class="time-display"><%= dtFormat.format(p.getHeureRetour()) %></td>
+                    <td class="time-display"><%= depAff != null ? dtFormat.format(depAff) : "-" %></td>
+                    <td class="time-display"><%= retAff != null ? dtFormat.format(retAff) : "-" %></td>
                     <td><%= p.getDureeTotaleMinutes() %> min</td>
                 </tr>
             <%      }
@@ -321,9 +399,10 @@
             </thead>
             <tbody>
             <%
-                List<Reservation> reservationsSansVehicule = (List<Reservation>) request.getAttribute("reservationsSansVehicule");
+                java.util.List reservationsSansVehicule = (java.util.List) request.getAttribute("reservationsSansVehicule");
                 if (reservationsSansVehicule != null && !reservationsSansVehicule.isEmpty()) {
-                    for (Reservation r : reservationsSansVehicule) {
+                    for (int ri = 0; ri < reservationsSansVehicule.size(); ri++) {
+                        Reservation r = (Reservation) reservationsSansVehicule.get(ri);
             %>
                 <tr>
                     <td><%= r.getId() %></td>
