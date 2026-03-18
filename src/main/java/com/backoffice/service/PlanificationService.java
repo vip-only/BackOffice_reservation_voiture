@@ -175,6 +175,10 @@ public class PlanificationService {
             
             // Heure de départ = MAX(date_heure_arrivee) du groupe
             Timestamp heureDepart = calculerHeureDepart(groupe);
+
+            // Regle supplementaire: si aucun vehicule capable n'est disponible a cette heure,
+            // on decale le depart a la prochaine heure de retour d'un vehicule capable.
+            heureDepart = ajusterHeureDepartSelonDisponibilite(groupe, heureDepart);
             
             // Les non assignes de cette fenetre seront retentes dans la suivante
             reportees = assignerGroupeReservations(groupe, heureDepart, idsReportees);
@@ -408,6 +412,7 @@ public class PlanificationService {
      */
     public List<GroupeVehicule> construireGroupesParVehicule(Date date) throws SQLException {
         List<GroupeVehicule> groupes = new ArrayList<>();
+        Map<Integer, Timestamp> disponibiliteParVehicule = new HashMap<>();
         
         List<PlanificationReservation> planifications = getPlanificationsByDate(date);
         
@@ -462,8 +467,20 @@ public class PlanificationService {
                 parVehicule.computeIfAbsent(vehId, k -> new ArrayList<>()).add(p);
             }
             
-            for (List<PlanificationReservation> planifVehicule : parVehicule.values()) {
-                groupes.add(construireUnGroupe(planifVehicule, maxArriveeFenetre));
+            for (Map.Entry<Integer, List<PlanificationReservation>> entryVeh : parVehicule.entrySet()) {
+                int vehId = entryVeh.getKey();
+                List<PlanificationReservation> planifVehicule = entryVeh.getValue();
+
+                // Regle supplementaire: un vehicule ne peut repartir qu'apres son retour precedent.
+                Timestamp heureDepartVehicule = maxArriveeFenetre;
+                Timestamp dispoVehicule = disponibiliteParVehicule.get(vehId);
+                if (dispoVehicule != null && dispoVehicule.after(heureDepartVehicule)) {
+                    heureDepartVehicule = dispoVehicule;
+                }
+
+                GroupeVehicule groupeConstruit = construireUnGroupe(planifVehicule, heureDepartVehicule);
+                groupes.add(groupeConstruit);
+                disponibiliteParVehicule.put(vehId, groupeConstruit.getHeureRetour());
             }
         }
         
@@ -579,6 +596,46 @@ public class PlanificationService {
             }
         }
         return max;
+    }
+
+    private int getMaxPassagers(List<Reservation> groupe) {
+        int max = 0;
+        for (Reservation r : groupe) {
+            if (r.getNombrePassager() > max) {
+                max = r.getNombrePassager();
+            }
+        }
+        return max;
+    }
+
+    private Timestamp ajusterHeureDepartSelonDisponibilite(List<Reservation> groupe, Timestamp heureDepartInitiale) throws SQLException {
+        Timestamp heureDepart = heureDepartInitiale;
+        int nbPassagersMax = getMaxPassagers(groupe);
+        int idHotelPlusLoin = trouverHotelPlusLoin(groupe);
+
+        // On borne les tentatives pour eviter les boucles infinies en cas de donnees incoherentes.
+        for (int i = 0; i < 10; i++) {
+            List<Vehicule> disponibles = reservationService.getVehiculesDisponibles(heureDepart, idHotelPlusLoin);
+            boolean auMoinsUnCapable = false;
+            for (Vehicule v : disponibles) {
+                if (v.getNombrePlace() >= nbPassagersMax) {
+                    auMoinsUnCapable = true;
+                    break;
+                }
+            }
+
+            if (auMoinsUnCapable) {
+                return heureDepart;
+            }
+
+            Timestamp prochaine = reservationService.getProchaineDisponibiliteVehiculeCapable(nbPassagersMax, heureDepart);
+            if (prochaine == null || !prochaine.after(heureDepart)) {
+                return heureDepart;
+            }
+            heureDepart = prochaine;
+        }
+
+        return heureDepart;
     }
 
     /**
