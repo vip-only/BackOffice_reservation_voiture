@@ -107,7 +107,7 @@ Améliorer l'algorithme d'assignation en y intégrant une répartition équitabl
   - Le reste des passagers forme une "sous-réservation" qui sera traitée selon les mêmes règles (récursion ou boucle).
 
 **Étape 2 & 3 — Heure de départ & Itinéraire (Inchangé)** :
-- **R2** : `heure_depart_effective = MAX(MAX(date_heure_arrivee du groupe), heure_disponibilite_vehicule)`.
+- **R2** : `heure_depart_effective = MAX(MAX(date_heure_arrivee assignée dans le groupe), heure_disponibilite_vehicule)`.
 - **R3** : Nearest-neighbour pour l'ordre de dépose.
 - **R4** : Départage alphabétique des hôtels si même distance.
 - **R5** : Chevauchement calculé sur l'heure de départ effective.
