@@ -69,6 +69,18 @@ public class ReservationDAO {
         }
     }
 
+    // METTRE A JOUR L'HEURE D'ARRIVEE (utilisee ici comme heure effective de prise en charge apres report)
+    public void updateDateHeureArrivee(int reservationId, Timestamp dateHeureArrivee) throws SQLException {
+        String sql = "UPDATE reservation SET date_heure_arrivee = ? WHERE id = ?";
+
+        try (Connection conn = DBConnection.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setTimestamp(1, dateHeureArrivee);
+            ps.setInt(2, reservationId);
+            ps.executeUpdate();
+        }
+    }
+
     // FIND ALL (avec jointures)
     public List<Reservation> findAll() throws SQLException {
         List<Reservation> reservations = new ArrayList<>();

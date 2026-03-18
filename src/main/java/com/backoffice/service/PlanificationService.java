@@ -22,6 +22,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.HashSet;
 
 public class PlanificationService {
     
@@ -146,16 +147,37 @@ public class PlanificationService {
         
         // Construire les fenêtres de regroupement TA
         List<List<Reservation>> fenetres = construireFenetresTA(reservationsSansVehicule, taMinutes);
+
+        // Reservations non assignees reportees sur la fenetre suivante
+        List<Reservation> reportees = new ArrayList<>();
         
         // Traiter chaque fenêtre
-        for (List<Reservation> groupe : fenetres) {
-            // Trier chaque groupe par nombre de passagers DESC
-            groupe.sort((r1, r2) -> Integer.compare(r2.getNombrePassager(), r1.getNombrePassager()));
+        for (List<Reservation> fenetre : fenetres) {
+            Set<Integer> idsReportees = new HashSet<>();
+            for (Reservation rr : reportees) {
+                idsReportees.add(rr.getId());
+            }
+
+            List<Reservation> groupe = new ArrayList<>();
+            if (!reportees.isEmpty()) {
+                groupe.addAll(reportees);
+            }
+            groupe.addAll(fenetre);
+
+            // Trier chaque groupe par nombre de passagers DESC puis heure d'arrivee
+            groupe.sort((r1, r2) -> {
+                int c = Integer.compare(r2.getNombrePassager(), r1.getNombrePassager());
+                if (c != 0) {
+                    return c;
+                }
+                return r1.getDateHeureArrivee().compareTo(r2.getDateHeureArrivee());
+            });
             
             // Heure de départ = MAX(date_heure_arrivee) du groupe
             Timestamp heureDepart = calculerHeureDepart(groupe);
             
-            assignerGroupeReservations(groupe, heureDepart);
+            // Les non assignes de cette fenetre seront retentes dans la suivante
+            reportees = assignerGroupeReservations(groupe, heureDepart, idsReportees);
         }
     }
     
@@ -204,9 +226,9 @@ public class PlanificationService {
      * Assigne des véhicules à un groupe de réservations.
      * heureDepart = MAX(arrivées du groupe) utilisé pour la vérification de disponibilité.
      */
-    private void assignerGroupeReservations(List<Reservation> groupe, Timestamp heureDepart) throws SQLException {
+    private List<Reservation> assignerGroupeReservations(List<Reservation> groupe, Timestamp heureDepart, Set<Integer> idsReportees) throws SQLException {
         if (groupe == null || groupe.isEmpty()) {
-            return;
+            return new ArrayList<>();
         }
 
         int idHotelPlusLoin = trouverHotelPlusLoin(groupe);
@@ -215,6 +237,7 @@ public class PlanificationService {
         Map<Integer, Integer> placesRestantes = new HashMap<>();
         Map<Integer, Vehicule> vehiculesMap = new HashMap<>();
         Map<Integer, List<Reservation>> reservationsParVehicule = new HashMap<>();
+        List<Reservation> nonAssignees = new ArrayList<>();
 
         for (int i = 0; i < groupe.size(); i++) {
             Reservation r = groupe.get(i);
@@ -232,6 +255,7 @@ public class PlanificationService {
 
             if (meilleur == null) {
                 // Aucune solution pour cette reservation
+                nonAssignees.add(r);
                 continue;
             }
 
@@ -257,10 +281,17 @@ public class PlanificationService {
             List<Reservation> ordreDepose = calculerOrdreDepose(sousGroupe);
 
             for (Reservation r : ordreDepose) {
+                // Une reservation reportee est ancree sur l'heure de depart de la nouvelle fenetre.
+                if (idsReportees != null && idsReportees.contains(r.getId()) && r.getDateHeureArrivee().before(heureDepart)) {
+                    reservationDAO.updateDateHeureArrivee(r.getId(), heureDepart);
+                    r.setDateHeureArrivee(heureDepart);
+                }
                 reservationDAO.assignVehicule(r.getId(), vehId);
                 r.setIdVehicule(vehId);
             }
         }
+
+        return nonAssignees;
     }
 
     private Vehicule choisirVehiculeDejaAssigneR1a(
