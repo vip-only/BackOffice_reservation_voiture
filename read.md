@@ -75,3 +75,6 @@ Izay moins de trajet no alefa , na essence na diesel, rahamisy mitovy dia izay v
 -Considere les reservations non assignes apres le prochain regroupement
 -heure de retour d'une voiture 
 >>>>>>> Stashed changes
+
+
+

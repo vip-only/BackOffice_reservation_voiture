@@ -328,6 +328,29 @@
             <tbody>
             <%
                 java.util.List planifications = (java.util.List) request.getAttribute("planifications");
+                java.util.List groupesVehiculesTbl = (java.util.List) request.getAttribute("groupesVehicules");
+
+                // Mapping reservationId -> horaires groupe
+                java.util.Map depParReservation = new java.util.HashMap();
+                java.util.Map retParReservation = new java.util.HashMap();
+
+                if (groupesVehiculesTbl != null) {
+                    for (int gti = 0; gti < groupesVehiculesTbl.size(); gti++) {
+                        GroupeVehicule gvTbl = (GroupeVehicule) groupesVehiculesTbl.get(gti);
+                        java.sql.Timestamp depG = gvTbl.getHeureDepart();
+                        java.sql.Timestamp retG = gvTbl.getHeureRetour();
+
+                        java.util.List resG = gvTbl.getReservations();
+                        if (resG != null) {
+                            for (int rgi = 0; rgi < resG.size(); rgi++) {
+                                Reservation rr = (Reservation) resG.get(rgi);
+                                depParReservation.put(rr.getId(), depG);
+                                retParReservation.put(rr.getId(), retG);
+                            }
+                        }
+                    }
+                }
+
                 if (planifications != null && !planifications.isEmpty()) {
                     for (int pi = 0; pi < planifications.size(); pi++) {
                         PlanificationReservation p = (PlanificationReservation) planifications.get(pi);
@@ -343,6 +366,11 @@
                                 default:   tl = tc;
                             }
                         }
+
+                        java.sql.Timestamp depAff = (java.sql.Timestamp) depParReservation.get(r.getId());
+                        java.sql.Timestamp retAff = (java.sql.Timestamp) retParReservation.get(r.getId());
+                        if (depAff == null) depAff = p.getHeureDepart();
+                        if (retAff == null) retAff = p.getHeureRetour();
             %>
                 <tr>
                     <td><%= r.getClient() %></td>
@@ -351,8 +379,8 @@
                     <td><%= String.format("%.1f", p.getDistanceKm()) %> km</td>
                     <td><%= r.getReferenceVehicule() %></td>
                     <td><span class="badge <%= bc %>"><%= tl %></span></td>
-                    <td class="time-display"><%= dtFormat.format(p.getHeureDepart()) %></td>
-                    <td class="time-display"><%= dtFormat.format(p.getHeureRetour()) %></td>
+                    <td class="time-display"><%= depAff != null ? dtFormat.format(depAff) : "-" %></td>
+                    <td class="time-display"><%= retAff != null ? dtFormat.format(retAff) : "-" %></td>
                     <td><%= p.getDureeTotaleMinutes() %> min</td>
                 </tr>
             <%      }
