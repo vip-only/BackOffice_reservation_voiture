@@ -147,6 +147,7 @@ public class PlanificationService {
         
         // Construire les fenêtres de regroupement TA
         List<List<Reservation>> fenetres = construireFenetresTA(reservationsSansVehicule, taMinutes);
+        Map<Integer, Integer> trajetsDuJourParVehicule = getNombreTrajetsDuJourParVehicule(date);
 
         // Reservations non assignees reportees sur la fenetre suivante
         List<Reservation> reportees = new ArrayList<>();
@@ -181,7 +182,7 @@ public class PlanificationService {
             heureDepart = ajusterHeureDepartSelonDisponibilite(groupe, heureDepart);
             
             // Les non assignes de cette fenetre seront retentes dans la suivante
-            reportees = assignerGroupeReservations(groupe, heureDepart, idsReportees);
+            reportees = assignerGroupeReservations(groupe, heureDepart, idsReportees, trajetsDuJourParVehicule);
         }
     }
     
@@ -230,7 +231,7 @@ public class PlanificationService {
      * Assigne des véhicules à un groupe de réservations.
      * heureDepart = MAX(arrivées du groupe) utilisé pour la vérification de disponibilité.
      */
-    private List<Reservation> assignerGroupeReservations(List<Reservation> groupe, Timestamp heureDepart, Set<Integer> idsReportees) throws SQLException {
+    private List<Reservation> assignerGroupeReservations(List<Reservation> groupe, Timestamp heureDepart, Set<Integer> idsReportees, Map<Integer, Integer> trajetsDuJourParVehicule) throws SQLException {
         if (groupe == null || groupe.isEmpty()) {
             return new ArrayList<>();
         }
@@ -248,12 +249,12 @@ public class PlanificationService {
             int nbPax = r.getNombrePassager();
 
             // R1a: priorite absolue aux vehicules deja assignes dans le groupe
-            Vehicule meilleur = choisirVehiculeDejaAssigneR1a(nbPax, placesRestantes, vehiculesMap);
+            Vehicule meilleur = choisirVehiculeDejaAssigneR1a(nbPax, placesRestantes, vehiculesMap, trajetsDuJourParVehicule);
 
             // Si aucun vehicule deja assigne ne peut absorber, on cherche un nouveau vehicule
             if (meilleur == null) {
                 meilleur = choisirNouveauVehiculeDisponibleAnticipatif(
-                    nbPax, groupe, i, vehiculesDisponibles, placesRestantes
+                    nbPax, groupe, i, vehiculesDisponibles, placesRestantes, trajetsDuJourParVehicule
                 );
             }
 
@@ -268,6 +269,8 @@ public class PlanificationService {
             if (!placesRestantes.containsKey(vehId)) {
                 placesRestantes.put(vehId, meilleur.getNombrePlace() - nbPax);
                 vehiculesMap.put(vehId, meilleur);
+                // Nouveau vehicule mobilise pour ce depart = 1 trajet de plus aujourd'hui.
+                trajetsDuJourParVehicule.put(vehId, trajetsDuJourParVehicule.getOrDefault(vehId, 0) + 1);
 
                 List<Reservation> liste = new ArrayList<>();
                 liste.add(r);
@@ -301,7 +304,8 @@ public class PlanificationService {
     private Vehicule choisirVehiculeDejaAssigneR1a(
         int nbPax,
         Map<Integer, Integer> placesRestantes,
-        Map<Integer, Vehicule> vehiculesMap
+        Map<Integer, Vehicule> vehiculesMap,
+        Map<Integer, Integer> trajetsDuJourParVehicule
     ) {
         Vehicule meilleur = null;
         int meilleureMarge = Integer.MAX_VALUE;
@@ -328,6 +332,17 @@ public class PlanificationService {
 
             // R1d: egalite -> Diesel puis id le plus petit
             if (reste == meilleureMarge && meilleur != null) {
+                int trajetsCandidat = trajetsDuJourParVehicule.getOrDefault(candidat.getId(), 0);
+                int trajetsMeilleur = trajetsDuJourParVehicule.getOrDefault(meilleur.getId(), 0);
+
+                // Nouveau departage entre R1c et R1d: moins de trajets du jour.
+                if (trajetsCandidat < trajetsMeilleur) {
+                    meilleur = candidat;
+                    continue;
+                } else if (trajetsCandidat > trajetsMeilleur) {
+                    continue;
+                }
+
                 boolean candidatDiesel = "D".equals(candidat.getTypeCarburant());
                 boolean meilleurDiesel = "D".equals(meilleur.getTypeCarburant());
 
@@ -347,7 +362,8 @@ public class PlanificationService {
         List<Reservation> groupe,
         int indexCourant,
         List<Vehicule> vehiculesDisponibles,
-        Map<Integer, Integer> placesRestantes
+        Map<Integer, Integer> placesRestantes,
+        Map<Integer, Integer> trajetsDuJourParVehicule
     ) {
         Vehicule meilleur = null;
         int meilleurNbAbsorbables = -1;
@@ -390,6 +406,17 @@ public class PlanificationService {
 
                 // R1d: a egalite, preference Diesel puis id
                 if (marge == meilleureMarge && meilleur != null) {
+                    int trajetsCandidat = trajetsDuJourParVehicule.getOrDefault(v.getId(), 0);
+                    int trajetsMeilleur = trajetsDuJourParVehicule.getOrDefault(meilleur.getId(), 0);
+
+                    // Nouveau departage entre R1c et R1d: moins de trajets du jour.
+                    if (trajetsCandidat < trajetsMeilleur) {
+                        meilleur = v;
+                        continue;
+                    } else if (trajetsCandidat > trajetsMeilleur) {
+                        continue;
+                    }
+
                     boolean vDiesel = "D".equals(v.getTypeCarburant());
                     boolean meilleurDiesel = "D".equals(meilleur.getTypeCarburant());
 
@@ -403,6 +430,28 @@ public class PlanificationService {
         }
 
         return meilleur;
+    }
+
+    private Map<Integer, Integer> getNombreTrajetsDuJourParVehicule(Date date) throws SQLException {
+        Map<Integer, Integer> trajets = new HashMap<>();
+        String sql =
+            "SELECT id_vehicule, COUNT(DISTINCT date_heure_arrivee) AS nb_trajets " +
+            "FROM reservation " +
+            "WHERE id_vehicule IS NOT NULL " +
+            "AND DATE(date_heure_arrivee) = ? " +
+            "GROUP BY id_vehicule";
+
+        try (Connection conn = DBConnection.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setDate(1, date);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    trajets.put(rs.getInt("id_vehicule"), rs.getInt("nb_trajets"));
+                }
+            }
+        }
+
+        return trajets;
     }
     /**
      * Construit les groupes de réservations pour une date donnée.

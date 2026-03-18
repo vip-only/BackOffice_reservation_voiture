@@ -110,7 +110,7 @@ INSERT INTO parametre (cle, valeur, unite) VALUES
 
 -- Distances depuis TNR (aeroport)
 INSERT INTO distance (from_id, to_id, kilometer) VALUES 
-    ('TNR', '1', 50.0),   -- TNR -> Colbert: 15 km
+    ('TNR', '1', 50.0);  -- TNR -> Colbert: 15 km
     -- ('TNR', '2', 22.5),   -- TNR -> Novotel: 22.5 km
     -- ('TNR', '3', 18.0),   -- TNR -> Ibis: 18 km
     -- ('TNR', '4', 30.0),   -- TNR -> Lokanga: 30 km
@@ -146,9 +146,11 @@ INSERT INTO distance (from_id, to_id, kilometer) VALUES
 -- Vehicules (tries par capacite et type carburant)
 INSERT INTO vehicule (reference, nombre_place, type_carburant) VALUES
     ('vehicule1', 12, 'D'),    -- Petite voiture essence
-    ('vehicule2', 5, 'ES'),     -- Petite voiture diesel (preferee si 4 places demandees)
-    ('vehicule3', 5, 'D'),     -- Monospace diesel
-    ('vehicule4', 12, 'ES') ; -- Monospace essence
+    ('vehicule3', 12, 'ES'),   -- Petite voiture diesel (preferee si 4 places demandees)
+    ('vehicule2', 5, 'ES');   -- Petite voiture diesel (preferee si 4 places demandees)
+    -- ('vehicule3', 2, 'ES');   -- Petite voiture diesel (preferee si 4 places demandees)
+    -- ('vehicule3', 5, 'D'),     -- Monospace diesel
+    -- ('vehicule4', 12, 'ES') ; -- Monospace essence
     -- Tres grand bus diesel
 
 
@@ -370,23 +372,26 @@ ORDER BY r.date_heure_arrivee;
 -- Date: 11 Mars 2026 - Executer ce script puis lancer l'assignation automatique
 
 -- TEST 1: Regles de base (F1, F2, F3) - Diesel prefere
-INSERT INTO reservation (client, nombre_passager, date_heure_arrivee, id_hotel) VALUES
-    ('Client1', 7, '2026-03-12 09:00:00', 1);
+-- INSERT INTO reservation (client, nombre_passager, date_heure_arrivee, id_hotel) VALUES
+--     ('Client1', 3, '2026-03-12 09:50:00', 1);
+
+-- INSERT INTO reservation (client, nombre_passager, date_heure_arrivee, id_hotel) VALUES
+--     ('Client2', 1, '2026-03-12 10:05:00', 1);
+
+-- INSERT INTO reservation (client, nombre_passager, date_heure_arrivee, id_hotel) VALUES
+--     ('Client3', 8, '2026-03-12 08:25:00', 1);
 
 INSERT INTO reservation (client, nombre_passager, date_heure_arrivee, id_hotel) VALUES
-    ('Client2', 11, '2026-03-12 09:00:00', 1);
+    ('Client4', 12, '2026-03-12 10:30:00', 1);
 
 INSERT INTO reservation (client, nombre_passager, date_heure_arrivee, id_hotel) VALUES
-    ('Client3', 3, '2026-03-12 09:00:00', 1);
+    ('Client5',12, '2026-03-12 08:00:00', 1);
 
-INSERT INTO reservation (client, nombre_passager, date_heure_arrivee, id_hotel) VALUES
-    ('Client4', 1, '2026-03-12 09:00:00', 1);
 
-INSERT INTO reservation (client, nombre_passager, date_heure_arrivee, id_hotel) VALUES
-    ('Client5', 2, '2026-03-12 09:00:00', 1);
-
-INSERT INTO reservation (client, nombre_passager, date_heure_arrivee, id_hotel) VALUES
-    ('Client6', 20, '2026-03-12 09:00:00', 1);
+-- INSERT INTO reservation (client, nombre_passager, date_heure_arrivee, id_hotel) VALUES
+--     ('Client6', 2, '2026-03-12 10:10:00', 1);
+-- INSERT INTO reservation (client, nombre_passager, date_heure_arrivee, id_hotel) VALUES
+    -- ('Client6', 20, '2026-03-12 09:00:00', 1);
 
 -- -- TEST 2: Regroupement simple (F5, F7) - Nearest-neighbour
 -- INSERT INTO reservation (client, nombre_passager, date_heure_arrivee, id_hotel) VALUES
