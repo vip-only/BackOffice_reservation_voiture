@@ -74,7 +74,101 @@ Rehefa hitady voiture approprie am resa iray dia jerena hoe iza no manana capaci
 Izay moins de trajet no alefa , na essence na diesel, rahamisy mitovy dia izay vao jerena ny carburant
 -Considere les reservations non assignes apres le prochain regroupement
 -heure de retour d'une voiture 
->>>>>>> Stashed changes
+
+
+
+## Enchainement des fonctions - Sprint 5 (planification)
+
+Cette section decrit l'ordre d'appel des fonctions pour expliquer le fonctionnement du code et faciliter la maintenance.
+
+### 1) Point d'entree (controller)
+
+Deux points d'entree principaux:
+
+1. `PlanificationController.assignerVehicules(date)`
+2. `PlanificationController.regrouperEtAssigner(date)`
+
+Le second est le flux complet recommande pour Sprint 5:
+
+1. assigner automatiquement les vehicules
+2. reconstruire les groupes pour l'affichage
+
+### 2) Orchestration metier (service)
+
+`PlanificationService.regrouperEtAssigner(date)`:
+
+1. appelle `assignerVehiculesAutomatiquement(date)`
+2. puis appelle `construireGroupesParVehicule(date)`
+3. retourne les groupes prets pour l'IHM
+
+### 3) Assignation automatique (coeur Sprint 5)
+
+`PlanificationService.assignerVehiculesAutomatiquement(date)`:
+
+1. charge les reservations sans vehicule via `ReservationDAO.findWithoutVehiculeByDate(date)`
+2. lit le parametre TA via `ParametreDAO.getTempsAttente()`
+3. trie chronologiquement pour construire les fenetres TA
+4. construit les fenetres avec `construireFenetresTA(...)`
+5. pour chaque fenetre:
+    - trie les reservations par passagers DESC (R0)
+    - calcule l'heure de depart groupe via `calculerHeureDepart(...)` (= MAX arrivee)
+    - appelle `assignerGroupeReservations(groupe, heureDepart)`
+
+### 4) Regles d'assignation dans un groupe
+
+`PlanificationService.assignerGroupeReservations(...)`:
+
+1. calcule l'hotel le plus loin via `trouverHotelPlusLoin(...)`
+2. recupere les vehicules disponibles via `ReservationService.getVehiculesDisponibles(heureDepart, idHotelPlusLoin)`
+3. pour chaque reservation du groupe (deja triee R0):
+    - tente d'abord R1a: `choisirVehiculeDejaAssigneR1a(...)`
+    - si echec, tente vehicule libre: `choisirNouveauVehiculeDisponibleAnticipatif(...)`
+    - met a jour les places restantes en memoire
+4. persiste les affectations:
+    - calcule l'ordre de depose via `calculerOrdreDepose(...)`
+    - update SQL via `ReservationDAO.assignVehicule(reservationId, vehiculeId)`
+
+### 5) Signification des regles R1a a R1d
+
+1. R1a: priorite absolue a la reutilisation d'un vehicule deja utilise dans le meme groupe, si capacite restante suffisante
+2. R1b (fallback): si aucun vehicule deja assigne ne peut absorber, on choisit un nouveau vehicule disponible
+3. R1c: minimiser le gaspillage (marge la plus faible mais suffisante)
+4. R1d: en cas d'egalite, preference Diesel puis id le plus petit
+
+### 6) Construction des groupes pour l'affichage
+
+`PlanificationService.construireGroupesParVehicule(date)`:
+
+1. charge les planifications via `getPlanificationsByDate(date)`
+2. reconstruit les fenetres TA
+3. sous-regroupe par vehicule
+4. pour chaque sous-groupe, appelle `construireUnGroupe(...)`
+
+`construireUnGroupe(...)`:
+
+1. prepare le `GroupeVehicule`
+2. calcule l'ordre de depose nearest-neighbour (`calculerOrdreDepose`)
+3. charge les distances (`getAllDistances`)
+4. calcule heureDepart, heureRetour, distance totale, duree totale
+5. produit l'itineraire detaille affiche dans la page planification
+
+### 7) Rappel important sur l'IHM
+
+Dans la page planification, le bloc "Regroupements par depart" est la reference pour les horaires de groupe (depart/retour communs par vehicule dans la fenetre TA).
+
+Pour garder une IHM coherente:
+
+1. les heures du tableau "Reservations planifiees" doivent reprendre les horaires du groupe
+2. le tableau "Reservations non assignees" doit etre alimente par `getReservationsSansVehicule(...)`
+
+### 8) Pourquoi cette architecture est maintenable
+
+1. Controller: orchestration web uniquement
+2. Service: regles metier et algorithmes Sprint
+3. DAO: acces SQL et persistence
+4. Model: structure de donnees transportee vers l'IHM
+
+En cas d'evolution (Sprint 6+), modifier en priorite les fonctions de choix dans `PlanificationService` (et/ou `VehiculeAffectationService`) sans casser controller/DAO.
 
 
 
