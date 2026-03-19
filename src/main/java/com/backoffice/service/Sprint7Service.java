@@ -120,15 +120,19 @@ public class Sprint7Service {
         int morceauxCrees = 0;
         int passagersFractionnes = 0;
 
-        List<Reservation> reportees = new ArrayList<>();
+        List<Reservation> reporteesPrioritaires = new ArrayList<>();
+        List<Reservation> reporteesNormales = new ArrayList<>();
 
         for (List<Reservation> fenetreBase : fenetres) {
             List<Reservation> groupe = new ArrayList<>();
             List<Reservation> prioritaires = new ArrayList<>();
             List<Reservation> nouvellesFenetre = new ArrayList<>();
 
-            if (!reportees.isEmpty()) {
-                prioritaires.addAll(reportees);
+            if (!reporteesPrioritaires.isEmpty()) {
+                prioritaires.addAll(reporteesPrioritaires);
+            }
+            if (!reporteesNormales.isEmpty()) {
+                nouvellesFenetre.addAll(reporteesNormales);
             }
             if (fenetreBase != null && !fenetreBase.isEmpty()) {
                 nouvellesFenetre.addAll(fenetreBase);
@@ -167,7 +171,8 @@ public class Sprint7Service {
                 continue;
             }
 
-            List<Reservation> nouvellesReportees = new ArrayList<>();
+            List<Reservation> nouvellesReporteesPrioritaires = new ArrayList<>();
+            List<Reservation> nouvellesReporteesNormales = new ArrayList<>();
 
             for (Reservation reservation : groupe) {
                 if (reservation.getIdVehicule() != null) {
@@ -185,12 +190,17 @@ public class Sprint7Service {
                 reservationsTraitees++;
 
                 if (!resultat.assignmentEffectuee) {
-                    nouvellesReportees.add(reservation);
+                    // Seules les reservations separees sont prioritaires au prochain depart.
+                    if (estReservationSeparee(reservation)) {
+                        nouvellesReporteesPrioritaires.add(reservation);
+                    } else {
+                        nouvellesReporteesNormales.add(reservation);
+                    }
                     continue;
                 }
 
                 if (resultat.reliquat != null) {
-                    nouvellesReportees.add(resultat.reliquat);
+                    nouvellesReporteesPrioritaires.add(resultat.reliquat);
                 }
 
                 if (resultat.fractionnee) {
@@ -200,7 +210,8 @@ public class Sprint7Service {
                 }
             }
 
-            reportees = nouvellesReportees;
+            reporteesPrioritaires = nouvellesReporteesPrioritaires;
+            reporteesNormales = nouvellesReporteesNormales;
         }
 
         int nonAssigneesFinales = reservationDAO.findWithoutVehiculeByDate(date).size();
@@ -539,5 +550,13 @@ public class Sprint7Service {
 
     private boolean estDiesel(Vehicule vehicule) {
         return "D".equals(vehicule.getTypeCarburant());
+    }
+
+    private boolean estReservationSeparee(Reservation reservation) {
+        if (reservation == null || reservation.getClient() == null) {
+            return false;
+        }
+        String client = reservation.getClient();
+        return client.contains("(reste)") || client.contains("(split)");
     }
 }
