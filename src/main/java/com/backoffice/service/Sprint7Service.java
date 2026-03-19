@@ -76,6 +76,23 @@ public class Sprint7Service {
         }
     }
 
+    private static class FractionnementResult {
+        private final int morceauxAssignes;
+        private final boolean assignmentEffectuee;
+        private final boolean fractionnee;
+        private final Reservation reliquat;
+
+        private FractionnementResult(int morceauxAssignes,
+                                     boolean assignmentEffectuee,
+                                     boolean fractionnee,
+                                     Reservation reliquat) {
+            this.morceauxAssignes = morceauxAssignes;
+            this.assignmentEffectuee = assignmentEffectuee;
+            this.fractionnee = fractionnee;
+            this.reliquat = reliquat;
+        }
+    }
+
     public ExecutionResult executer(Date date) throws SQLException {
         reservationDAO.ensureReservationVehiculeTable();
 
@@ -103,8 +120,22 @@ public class Sprint7Service {
         int morceauxCrees = 0;
         int passagersFractionnes = 0;
 
-        for (List<Reservation> fenetre : fenetres) {
-            if (fenetre.isEmpty()) {
+        List<Reservation> reportees = new ArrayList<>();
+
+        for (List<Reservation> fenetreBase : fenetres) {
+            List<Reservation> groupe = new ArrayList<>();
+            Map<Integer, Boolean> prioriteReportee = new HashMap<>();
+            if (!reportees.isEmpty()) {
+                groupe.addAll(reportees);
+                for (Reservation r : reportees) {
+                    prioriteReportee.put(r.getId(), true);
+                }
+            }
+            if (fenetreBase != null && !fenetreBase.isEmpty()) {
+                groupe.addAll(fenetreBase);
+            }
+
+            if (groupe.isEmpty()) {
                 continue;
             }
 
@@ -113,13 +144,19 @@ public class Sprint7Service {
             Map<Integer, Integer> placesRestantesFenetre = new HashMap<>();
             Map<Integer, Vehicule> vehiculesUtilisesFenetre = new HashMap<>();
             initialiserEtatFenetreDepuisAssignationsExistantes(
-                fenetre,
+                groupe,
                 vehiculesParId,
                 placesRestantesFenetre,
                 vehiculesUtilisesFenetre
             );
 
-            fenetre.sort((a, b) -> {
+            groupe.sort((a, b) -> {
+                boolean aReportee = prioriteReportee.getOrDefault(a.getId(), false);
+                boolean bReportee = prioriteReportee.getOrDefault(b.getId(), false);
+                if (aReportee != bReportee) {
+                    return aReportee ? -1 : 1;
+                }
+
                 int cmpPax = Integer.compare(b.getNombrePassager(), a.getNombrePassager());
                 if (cmpPax != 0) {
                     return cmpPax;
@@ -127,18 +164,20 @@ public class Sprint7Service {
                 return a.getDateHeureArrivee().compareTo(b.getDateHeureArrivee());
             });
 
-            Timestamp heureDepartFenetre = planificationService.calculerHeureDepartAjustee(fenetre);
+            Timestamp heureDepartFenetre = planificationService.calculerHeureDepartAjustee(groupe);
             if (heureDepartFenetre == null) {
                 continue;
             }
 
-            for (Reservation reservation : fenetre) {
+            List<Reservation> nouvellesReportees = new ArrayList<>();
+
+            for (Reservation reservation : groupe) {
                 if (reservation.getIdVehicule() != null) {
                     continue;
                 }
 
                 int totalPax = reservation.getNombrePassager();
-                int chunks = assignerAvecFractionnement(
+                FractionnementResult resultat = assignerAvecFractionnement(
                     reservation,
                     heureDepartFenetre,
                     trajetsParVehicule,
@@ -147,12 +186,23 @@ public class Sprint7Service {
                 );
                 reservationsTraitees++;
 
-                if (chunks > 1) {
+                if (!resultat.assignmentEffectuee) {
+                    nouvellesReportees.add(reservation);
+                    continue;
+                }
+
+                if (resultat.reliquat != null) {
+                    nouvellesReportees.add(resultat.reliquat);
+                }
+
+                if (resultat.fractionnee) {
                     reservationsFractionnees++;
-                    morceauxCrees += (chunks - 1);
+                    morceauxCrees += Math.max(0, resultat.morceauxAssignes - 1);
                     passagersFractionnes += totalPax;
                 }
             }
+
+            reportees = nouvellesReportees;
         }
 
         int nonAssigneesFinales = reservationDAO.findWithoutVehiculeByDate(date).size();
@@ -201,14 +251,15 @@ public class Sprint7Service {
     /**
      * Retourne le nombre de morceaux crees pour cette reservation (1 = pas de fractionnement).
      */
-    private int assignerAvecFractionnement(Reservation reservation,
-                                           Timestamp heureDepart,
-                                           Map<Integer, Integer> trajetsParVehicule,
-                                           Map<Integer, Integer> placesRestantesFenetre,
-                                           Map<Integer, Vehicule> vehiculesUtilisesFenetre) throws SQLException {
+    private FractionnementResult assignerAvecFractionnement(Reservation reservation,
+                                                            Timestamp heureDepart,
+                                                            Map<Integer, Integer> trajetsParVehicule,
+                                                            Map<Integer, Integer> placesRestantesFenetre,
+                                                            Map<Integer, Vehicule> vehiculesUtilisesFenetre) throws SQLException {
         int paxRestants = reservation.getNombrePassager();
         int chunks = 0;
         boolean reservationPrincipaleUtilisee = false;
+        Reservation reliquatCree = null;
 
         while (paxRestants > 0) {
             Vehicule choisi = choisirVehiculeDejaMobilise(
@@ -307,14 +358,16 @@ public class Sprint7Service {
             reliquat.setNomHotel(reservation.getNomHotel());
             reliquat.setIdVehicule(null);
             reservationDAO.insert(reliquat);
+            reliquatCree = reliquat;
         }
 
         // Aucun vehicule n'a ete assigne: reservation d'origine intacte.
         if (chunks == 0) {
-            return 1;
+            return new FractionnementResult(0, false, false, null);
         }
 
-        return chunks;
+        boolean fractionnee = chunks > 1 || reliquatCree != null;
+        return new FractionnementResult(chunks, true, fractionnee, reliquatCree);
     }
 
     private Vehicule choisirVehiculeDejaMobilise(Map<Integer, Integer> placesRestantesFenetre,
