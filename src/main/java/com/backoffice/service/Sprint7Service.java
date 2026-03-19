@@ -124,20 +124,32 @@ public class Sprint7Service {
 
         for (List<Reservation> fenetreBase : fenetres) {
             List<Reservation> groupe = new ArrayList<>();
-            Map<Integer, Boolean> prioriteReportee = new HashMap<>();
+            List<Reservation> prioritaires = new ArrayList<>();
+            List<Reservation> nouvellesFenetre = new ArrayList<>();
+
             if (!reportees.isEmpty()) {
-                groupe.addAll(reportees);
-                for (Reservation r : reportees) {
-                    prioriteReportee.put(r.getId(), true);
-                }
+                prioritaires.addAll(reportees);
             }
             if (fenetreBase != null && !fenetreBase.isEmpty()) {
-                groupe.addAll(fenetreBase);
+                nouvellesFenetre.addAll(fenetreBase);
             }
 
-            if (groupe.isEmpty()) {
+            if (prioritaires.isEmpty() && nouvellesFenetre.isEmpty()) {
                 continue;
             }
+
+            // Priorite absolue aux reportees/restes, sans dependre du tri.
+            groupe.addAll(prioritaires);
+
+            // Le tri decroissant s'applique uniquement aux nouvelles reservations de la fenetre.
+            nouvellesFenetre.sort((a, b) -> {
+                int cmpPax = Integer.compare(b.getNombrePassager(), a.getNombrePassager());
+                if (cmpPax != 0) {
+                    return cmpPax;
+                }
+                return a.getDateHeureArrivee().compareTo(b.getDateHeureArrivee());
+            });
+            groupe.addAll(nouvellesFenetre);
 
             // Etat de capacite partage dans la meme fenetre TA pour permettre
             // le fractionnement progressif entre reservations du groupe.
@@ -149,20 +161,6 @@ public class Sprint7Service {
                 placesRestantesFenetre,
                 vehiculesUtilisesFenetre
             );
-
-            groupe.sort((a, b) -> {
-                boolean aReportee = prioriteReportee.getOrDefault(a.getId(), false);
-                boolean bReportee = prioriteReportee.getOrDefault(b.getId(), false);
-                if (aReportee != bReportee) {
-                    return aReportee ? -1 : 1;
-                }
-
-                int cmpPax = Integer.compare(b.getNombrePassager(), a.getNombrePassager());
-                if (cmpPax != 0) {
-                    return cmpPax;
-                }
-                return a.getDateHeureArrivee().compareTo(b.getDateHeureArrivee());
-            });
 
             Timestamp heureDepartFenetre = planificationService.calculerHeureDepartAjustee(groupe);
             if (heureDepartFenetre == null) {
