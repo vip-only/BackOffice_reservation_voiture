@@ -127,7 +127,10 @@ public class Sprint7Service {
                 return a.getDateHeureArrivee().compareTo(b.getDateHeureArrivee());
             });
 
-            Timestamp heureDepartFenetre = calculerHeureDepartFenetre(fenetre);
+            Timestamp heureDepartFenetre = planificationService.calculerHeureDepartAjustee(fenetre);
+            if (heureDepartFenetre == null) {
+                continue;
+            }
 
             for (Reservation reservation : fenetre) {
                 if (reservation.getIdVehicule() != null) {
@@ -193,16 +196,6 @@ public class Sprint7Service {
         }
 
         return fenetres;
-    }
-
-    private Timestamp calculerHeureDepartFenetre(List<Reservation> fenetre) {
-        Timestamp max = fenetre.get(0).getDateHeureArrivee();
-        for (Reservation reservation : fenetre) {
-            if (reservation.getDateHeureArrivee().after(max)) {
-                max = reservation.getDateHeureArrivee();
-            }
-        }
-        return max;
     }
 
     /**

@@ -372,7 +372,7 @@ ORDER BY r.date_heure_arrivee;
 
 -- TEST 1: Regles de base (F1, F2, F3) - Diesel prefere
 INSERT INTO reservation (client, nombre_passager, date_heure_arrivee, id_hotel) VALUES
-    ('Client1', 3, '2026-03-12 09:50:00', 1);
+    ('Client1', 3, '2026-03-12 10:00:00', 1);
 
 INSERT INTO reservation (client, nombre_passager, date_heure_arrivee, id_hotel) VALUES
     ('Client2', 1, '2026-03-12 10:05:00', 1);
