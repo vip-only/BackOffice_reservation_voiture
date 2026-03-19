@@ -505,4 +505,37 @@ public class ReservationDAO {
 
         return trajetsParVehicule;
     }
+
+    /**
+     * Supprime les traces reservation_vehicule pour une date donnee.
+     */
+    public void deleteReservationVehiculeByDate(java.sql.Date date) throws SQLException {
+        String sql =
+            "DELETE FROM reservation_vehicule rv " +
+            "USING reservation r " +
+            "WHERE rv.reservation_id = r.id " +
+            "AND DATE(r.date_heure_arrivee) = ?";
+
+        try (Connection conn = DBConnection.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setDate(1, date);
+            ps.executeUpdate();
+        }
+    }
+
+    /**
+     * Reinitialise les assignations vehicules d'une date (id_vehicule -> NULL).
+     */
+    public void resetAssignationsByDate(java.sql.Date date) throws SQLException {
+        String sql =
+            "UPDATE reservation " +
+            "SET id_vehicule = NULL " +
+            "WHERE DATE(date_heure_arrivee) = ?";
+
+        try (Connection conn = DBConnection.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setDate(1, date);
+            ps.executeUpdate();
+        }
+    }
 }
