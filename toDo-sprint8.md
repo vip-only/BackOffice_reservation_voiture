@@ -20,15 +20,18 @@ vehicule qui revient + non assignees
 Ajouter une regle de reaction quand un vehicule termine un trajet et redevient disponible dans la journee.
 
 Principe metier sprint 8 (version en cours de validation):
-- Si un vehicule revient et qu'il existe des reservations non assignees,
+- Si un vehicule est disponible et qu'il existe des reservations non assignees,
 - et si la somme des places en attente est >= capacite du vehicule,
 - alors le vehicule repart immediatement avec un nouveau groupe.
 - Sinon, il ne part pas tout de suite et les reservations restent dans le prochain regroupement TA.
+- Dans la prochaine fenetre TA, les reservations non assignees passent en priorite.
+  Si elles sont plusieurs, appliquer le tri decroissant et les regles sprint precedentes entre elles.
+  Ensuite seulement, appliquer les regles normales de la fenetre pour les nouvelles reservations de cette fenetre.
 
 ### Fonctionnalites (liste)
-- [ ] Detecter les evenements "retour vehicule" (heure de retour calculee).
+- [ ] Detecter les evenements "disponible vehicule" (heure de retour calculee+ regarder si c'est l'heure disponibilité vehicule).
 - [ ] Evaluer les reservations non assignees a l'instant du retour.
-- [ ] Regle Sprint 8 : depart immediate si charge en attente >= capacite vehicule revenu.
+- [ ] Regle Sprint 8 : depart immediate si charge en attente >= capacite vehicule disponible.
 - [ ] Sinon : report automatique des reservations dans le regroupement suivant.
 - [ ] Conserver toutes les regles Sprint 5/6/7 (TA, capacite, diesel, nb trajets, fractionnement, nearest-neighbour).
 - [ ] Ajouter des informations de trace pour expliquer chaque decision.
@@ -43,11 +46,11 @@ Principe metier sprint 8 (version en cours de validation):
 - **R2** : Fractionnement autorise si aucun vehicule ne peut absorber toute la reservation.
 
 **Etape 1 - Nouveau declencheur Sprint 8 (retour vehicule)**
-- **R8a - Detection retour** : Lorsqu'un vehicule atteint sa `date_heure_retour`, il devient candidat a une nouvelle mission.
+- **R8a - Detection retour** : Lorsqu'un vehicule atteint sa `date_heure_retour` ou `heureDisponibilite`, il devient candidat a une nouvelle mission.
 - **R8b - Candidats non assignes** : Constituer la liste des reservations non assignees eligibles a cet instant (meme date de service).
 - **R8c - Condition de depart immediate** :
-  - Si `SUM(passagers_en_attente) >= capacite_vehicule_retour`,
-  - alors depart immediate a `heure_depart = date_heure_retour` du vehicule.
+  - Si `SUM(passagers_en_attente) >= capacite_vehicule_disponible`,
+  - alors depart immediate a `heure_depart = date_heure_disponible` du vehicule.
 - **R8d - Sinon (pas assez de charge)** :
   - Ne pas declencher de depart immediate,
   - conserver ces reservations pour le prochain regroupement TA.
@@ -61,11 +64,15 @@ Principe metier sprint 8 (version en cours de validation):
 - Le depart immediate sprint 8 ne supprime pas TA.
 - Il s'insere entre deux fenetres comme un "mini regroupement opportuniste".
 - Les non pris dans ce depart immediate restent pour la fenetre suivante.
+- Regle de priorite a la fenetre suivante :
+  1) traiter d'abord le stock des non assignees,
+  2) en cas de pluralite, tri decroissant + regles sprint 5/6/7,
+  3) puis traiter les reservations nouvelles de la fenetre.
 
 ### Resume visuel des regles Sprint 8
 
 ```
-A chaque evenement "vehicule revient" :
+A chaque evenement "vehicule revient" ou "vehicule disponible" :
 |
 +- 1) Recuperer reservations non assignees eligibles (meme jour)
 |
