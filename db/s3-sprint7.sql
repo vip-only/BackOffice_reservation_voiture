@@ -64,7 +64,7 @@ CREATE TABLE reservation (
     id SERIAL PRIMARY KEY,
     client VARCHAR(200) NOT NULL,
     nombre_passager INTEGER,
-    date_heure_arrivee TIMESTAMP NOT NULL,
+    date_heure_arrivee TIMESTAMP NOT NULL,/* heure reservation*/
     id_hotel INTEGER NOT NULL,
     id_vehicule INTEGER,
     CONSTRAINT fk_hotel FOREIGN KEY (id_hotel) REFERENCES hotel(id_hotel),
@@ -155,12 +155,20 @@ INSERT INTO distance (from_id, to_id, kilometer) VALUES
 --     ('4', '6', 17.0),   -- Lokanga <-> Panorama
 --     -- Depuis Carlton (5) vers hotels avec ID > 5
 --     ('5', '6', 6.0);    -- Carlton <-> Panorama
-
--- Vehicules (tries par capacite et type carburant)
 INSERT INTO vehicule (reference, nombre_place, type_carburant) VALUES
-    ('vehicule1', 12, 'D'),    -- Petite voiture essence
-    ('vehicule3', 12, 'ES'),   -- Petite voiture diesel (preferee si 4 places demandees)
-    ('vehicule2', 5, 'ES');   -- Petite voiture diesel (preferee si 4 places demandees)
+    ('vehicule1', 8, 'ES'),    -- Petite voiture essence
+    ('vehicule2', 3, 'D'); 
+
+    -- 9
+
+
+
+
+-- -- Vehicules (tries par capacite et type carburant)
+-- INSERT INTO vehicule (reference, nombre_place, type_carburant) VALUES
+--     ('vehicule1', 12, 'D'),    -- Petite voiture essence
+--     ('vehicule3', 12, 'ES'),   -- Petite voiture diesel (preferee si 4 places demandees)
+--     ('vehicule2', 5, 'ES');   -- Petite voiture diesel (preferee si 4 places demandees)
     -- ('vehicule3', 2, 'ES');   -- Petite voiture diesel (preferee si 4 places demandees)
     -- ('vehicule3', 5, 'D'),     -- Monospace diesel
     -- ('vehicule4', 12, 'ES') ; -- Monospace essence
@@ -385,7 +393,9 @@ ORDER BY r.date_heure_arrivee;
 -- Date: 11 Mars 2026 - Executer ce script puis lancer l'assignation automatique
 
 -- TEST 1: Regles de base (F1, F2, F3) - Diesel prefere
--- INSERT INTO reservation (client, nombre_passager, date_heure_arrivee, id_hotel) VALUES
+-- INSERT INTO reserva
+
+.tion (client, nombre_passager, date_heure_arrivee, id_hotel) VALUES
 --     ('Client1', 3, '2026-03-12 09:50:00', 1);
 
 -- INSERT INTO reservation (client, nombre_passager, date_heure_arrivee, id_hotel) VALUES
@@ -395,12 +405,29 @@ ORDER BY r.date_heure_arrivee;
 --     ('Client3', 8, '2026-03-12 08:25:00', 1);
 
 INSERT INTO reservation (client, nombre_passager, date_heure_arrivee, id_hotel) VALUES
-    ('Client4', 12, '2026-03-12 10:30:00', 1);
+    ('Client4', 6, '2026-03-12 08:00:00', 1);
+
 
 INSERT INTO reservation (client, nombre_passager, date_heure_arrivee, id_hotel) VALUES
-    ('Client5',12, '2026-03-12 08:00:00', 1);
+    ('Client4', 4, '2026-03-12 08:00:00', 1);
 
 
+INSERT INTO reservation (client, nombre_passager, date_heure_arrivee, id_hotel) VALUES
+    ('Client4', 3, '2026-03-12 08:00:00', 1);
+
+-- INSERT INTO reservation (client, nombre_passager, date_heure_arrivee, id_hotel) VALUES
+--     ('Client5', 7, '2026-03-12 08:00:00', 1);
+
+-- -- INSERT INTO reservation (client, nombre_passager, date_heure_arrivee, id_hotel) VALUES
+-- --     ('Client56', 1, '2026-03-12 09:00:00', 1);   
+
+-- INSERT INTO reservation (client, nombre_passager, date_heure_arrivee, id_hotel) VALUES
+--     ('Client6', 8, '2026-03-12 14:00:00', 1);
+
+disonibilte_depart(
+    id vehicule
+    heure_debut 00:00/14:30
+)
 -- INSERT INTO reservation (client, nombre_passager, date_heure_arrivee, id_hotel) VALUES
 --     ('Client6', 2, '2026-03-12 10:10:00', 1);
 -- INSERT INTO reservation (client, nombre_passager, date_heure_arrivee, id_hotel) VALUES

@@ -15,6 +15,10 @@ public class ReservationDAO {
      * Retourne la derniere date (sans l'heure) trouvee dans reservation.
      * Peut retourner null si aucune reservation n'existe.
      */
+
+    public ReservationDAO(){
+        
+    }
     public java.sql.Date getDerniereDateReservation() throws SQLException {
         String sql = "SELECT DATE(MAX(date_heure_arrivee)) AS derniere_date FROM reservation";
 

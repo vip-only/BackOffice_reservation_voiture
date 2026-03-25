@@ -23,7 +23,8 @@
 - Fonctionnalité: pour chaque réservation du jour, proposer /assigner une voiture (départ et retour à l'aéroport) selon les règles ci-dessous.
 
 ### Règles d'affectation
-1. La voiture doit avoir une capacité >= nombre de personnes de la réservation.  
+1. La voiture doit 
+avoir une capacité >= nombre de personnes de la réservation.  
 2. Choisir la voiture dont la capacité est la plus proche (la plus petite capacité satisfaisante).  
 3. Si plusieurs voitures respectent la règle 2, préférer une voiture Diesel si disponible. 
 
