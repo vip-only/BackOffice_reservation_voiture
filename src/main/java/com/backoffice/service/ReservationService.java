@@ -77,9 +77,10 @@ public class ReservationService {
             "    WHERE ha.date_heure_arrivee < nr.date_heure_retour " +
             "    AND ha.date_heure_retour > nr.date_heure_arrivee " +
             ") " +
-            "SELECT v.id, v.reference, v.nombre_place, v.type_carburant " +
+            "SELECT v.id, v.reference, v.nombre_place, v.type_carburant, v.heure_disponibilite " +
             "FROM vehicule v " +
-            "WHERE v.id NOT IN (SELECT vehicule_id FROM vehicules_occupes)";
+            "WHERE v.id NOT IN (SELECT vehicule_id FROM vehicules_occupes) " +
+            "AND ?::time >= COALESCE(v.heure_disponibilite, TIME '00:00:00')";
 
         try (Connection conn = DBConnection.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
@@ -87,6 +88,7 @@ public class ReservationService {
             ps.setTimestamp(1, dateHeureArrivee);
             ps.setTimestamp(2, dateHeureArrivee);
             ps.setInt(3, idHotel);
+            ps.setTime(4, new Time(dateHeureArrivee.getTime()));
 
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
@@ -94,7 +96,8 @@ public class ReservationService {
                         rs.getInt("id"),
                         rs.getString("reference"),
                         rs.getInt("nombre_place"),
-                        rs.getString("type_carburant")
+                        rs.getString("type_carburant"),
+                        rs.getTime("heure_disponibilite")
                     );
                     vehiculesDisponibles.add(v);
                 }
@@ -117,12 +120,19 @@ public class ReservationService {
             "    CROSS JOIN (SELECT valeur FROM parametre WHERE cle = 'VITESSE_MOYENNE') p " +
             "    WHERE d.from_id = 'TNR' AND d.to_id = CAST(? AS VARCHAR) " +
             ") " +
-            "SELECT COUNT(*) AS nb_conflits " +
-            "FROM v_historique_assignation ha " +
-            "CROSS JOIN nouvelle_reservation nr " +
-            "WHERE ha.vehicule_id = ? " +
-            "AND ha.date_heure_arrivee < nr.date_heure_retour " +
-            "AND ha.date_heure_retour > nr.date_heure_arrivee";
+            "SELECT CASE " +
+            "    WHEN ?::time < COALESCE(v.heure_disponibilite, TIME '00:00:00') THEN 1 " +
+            "    ELSE ( " +
+            "        SELECT COUNT(*) " +
+            "        FROM v_historique_assignation ha " +
+            "        CROSS JOIN nouvelle_reservation nr " +
+            "        WHERE ha.vehicule_id = v.id " +
+            "        AND ha.date_heure_arrivee < nr.date_heure_retour " +
+            "        AND ha.date_heure_retour > nr.date_heure_arrivee " +
+            "    ) " +
+            "END AS nb_conflits " +
+            "FROM vehicule v " +
+            "WHERE v.id = ?";
 
         try (Connection conn = DBConnection.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
@@ -130,7 +140,8 @@ public class ReservationService {
             ps.setTimestamp(1, dateHeureArrivee);
             ps.setTimestamp(2, dateHeureArrivee);
             ps.setInt(3, idHotel);
-            ps.setInt(4, vehiculeId);
+            ps.setTime(4, new Time(dateHeureArrivee.getTime()));
+            ps.setInt(5, vehiculeId);
 
             try (ResultSet rs = ps.executeQuery()) {
                 if (rs.next()) {

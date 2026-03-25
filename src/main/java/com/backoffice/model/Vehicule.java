@@ -1,24 +1,29 @@
 package com.backoffice.model;
 
+import java.sql.Time;
+
 public class Vehicule {
     private int id;
     private String reference;
     private int nombrePlace;
     private String typeCarburant;
+    private Time heureDisponibilite;
 
     public Vehicule() {}
 
-    public Vehicule(String reference, int nombrePlace, String typeCarburant) {
+    public Vehicule(String reference, int nombrePlace, String typeCarburant, Time heureDisponibilite) {
         this.reference = reference;
         this.nombrePlace = nombrePlace;
         this.typeCarburant = typeCarburant;
+        this.heureDisponibilite = heureDisponibilite;
     }
 
-    public Vehicule(int id, String reference, int nombrePlace, String typeCarburant) {
+    public Vehicule(int id, String reference, int nombrePlace, String typeCarburant, Time heureDisponibilite) {
         this.id = id;
         this.reference = reference;
         this.nombrePlace = nombrePlace;
         this.typeCarburant = typeCarburant;
+        this.heureDisponibilite = heureDisponibilite;
     }
 
     public int getId() {
@@ -51,6 +56,14 @@ public class Vehicule {
 
     public void setTypeCarburant(String typeCarburant) {
         this.typeCarburant = typeCarburant;
+    }
+
+    public Time getHeureDisponibilite() {
+        return heureDisponibilite;
+    }
+
+    public void setHeureDisponibilite(Time heureDisponibilite) {
+        this.heureDisponibilite = heureDisponibilite;
     }
 
     // Méthode utilitaire pour afficher le type de carburant en clair

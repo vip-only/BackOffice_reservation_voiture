@@ -76,18 +76,13 @@ public class Sprint7Service {
         }
     }
 
-    private static class FractionnementResult {
-        private final int morceauxAssignes;
-        private final boolean assignmentEffectuee;
+    private static class AffectationResult {
+        private final boolean assignee;
         private final boolean fractionnee;
         private final Reservation reliquat;
 
-        private FractionnementResult(int morceauxAssignes,
-                                     boolean assignmentEffectuee,
-                                     boolean fractionnee,
-                                     Reservation reliquat) {
-            this.morceauxAssignes = morceauxAssignes;
-            this.assignmentEffectuee = assignmentEffectuee;
+        private AffectationResult(boolean assignee, boolean fractionnee, Reservation reliquat) {
+            this.assignee = assignee;
             this.fractionnee = fractionnee;
             this.reliquat = reliquat;
         }
@@ -120,40 +115,30 @@ public class Sprint7Service {
         int morceauxCrees = 0;
         int passagersFractionnes = 0;
 
-        List<Reservation> reporteesPrioritaires = new ArrayList<>();
-        List<Reservation> reporteesNormales = new ArrayList<>();
+        List<Reservation> reportees = new ArrayList<>();
 
         for (List<Reservation> fenetreBase : fenetres) {
             List<Reservation> groupe = new ArrayList<>();
-            List<Reservation> prioritaires = new ArrayList<>();
-            List<Reservation> nouvellesFenetre = new ArrayList<>();
-
-            if (!reporteesPrioritaires.isEmpty()) {
-                prioritaires.addAll(reporteesPrioritaires);
-            }
-            if (!reporteesNormales.isEmpty()) {
-                nouvellesFenetre.addAll(reporteesNormales);
+            if (!reportees.isEmpty()) {
+                groupe.addAll(reportees);
             }
             if (fenetreBase != null && !fenetreBase.isEmpty()) {
-                nouvellesFenetre.addAll(fenetreBase);
+                groupe.addAll(fenetreBase);
             }
 
-            if (prioritaires.isEmpty() && nouvellesFenetre.isEmpty()) {
+            if (groupe.isEmpty()) {
                 continue;
             }
 
-            // Priorite absolue aux reportees/restes, sans dependre du tri.
-            groupe.addAll(prioritaires);
+            // Priorite de tri pour la fenetre courante:
+            // on garde la taille AVANT assignation pour les splits dans la meme fenetre.
+            // En fenetre suivante, une reservation reportee est reconsideree comme nouvelle.
+            Map<Integer, Integer> prioritePaxFenetre = new HashMap<>();
+            for (Reservation r : groupe) {
+                prioritePaxFenetre.put(r.getId(), r.getNombrePassager());
+            }
 
-            // Le tri decroissant s'applique uniquement aux nouvelles reservations de la fenetre.
-            nouvellesFenetre.sort((a, b) -> {
-                int cmpPax = Integer.compare(b.getNombrePassager(), a.getNombrePassager());
-                if (cmpPax != 0) {
-                    return cmpPax;
-                }
-                return a.getDateHeureArrivee().compareTo(b.getDateHeureArrivee());
-            });
-            groupe.addAll(nouvellesFenetre);
+            trierReservationsDecroissant(groupe, prioritePaxFenetre);
 
             // Etat de capacite partage dans la meme fenetre TA pour permettre
             // le fractionnement progressif entre reservations du groupe.
@@ -171,47 +156,115 @@ public class Sprint7Service {
                 continue;
             }
 
-            List<Reservation> nouvellesReporteesPrioritaires = new ArrayList<>();
-            List<Reservation> nouvellesReporteesNormales = new ArrayList<>();
+            List<Reservation> nouvellesReportees = new ArrayList<>();
 
-            for (Reservation reservation : groupe) {
+            while (!groupe.isEmpty()) {
+                Vehicule vehiculePartiel = choisirVehiculePartiellementRempli(
+                    placesRestantesFenetre,
+                    vehiculesUtilisesFenetre,
+                    trajetsParVehicule
+                );
+
+                if (vehiculePartiel != null) {
+                    int placesRestantes = placesRestantesFenetre.getOrDefault(vehiculePartiel.getId(), 0);
+                    Reservation reservationProche = extraireReservationPlusProche(groupe, placesRestantes);
+                    if (reservationProche != null) {
+                        int totalPaxAvant = reservationProche.getNombrePassager();
+                        AffectationResult resultatPartiel = affecterSurVehicule(
+                            reservationProche,
+                            vehiculePartiel,
+                            heureDepartFenetre,
+                            false,
+                            trajetsParVehicule,
+                            placesRestantesFenetre,
+                            vehiculesUtilisesFenetre,
+                            prioritePaxFenetre
+                        );
+                        reservationsTraitees++;
+
+                        if (resultatPartiel.reliquat != null) {
+                            groupe.add(resultatPartiel.reliquat);
+                        }
+
+                        if (resultatPartiel.fractionnee) {
+                            reservationsFractionnees++;
+                            morceauxCrees += 1;
+                            passagersFractionnes += totalPaxAvant;
+                        }
+
+                        trierReservationsDecroissant(groupe, prioritePaxFenetre);
+                        continue;
+                    }
+                }
+
+                Reservation reservation = groupe.remove(0);
                 if (reservation.getIdVehicule() != null) {
                     continue;
                 }
 
-                int totalPax = reservation.getNombrePassager();
-                FractionnementResult resultat = assignerAvecFractionnement(
+                int totalPaxAvant = reservation.getNombrePassager();
+
+                List<Vehicule> vehiculesDisponibles = reservationService.getVehiculesDisponibles(heureDepartFenetre, reservation.getIdHotel());
+                vehiculesDisponibles.removeIf(v -> vehiculesUtilisesFenetre.containsKey(v.getId()));
+                if (vehiculesDisponibles.isEmpty()) {
+                    nouvellesReportees.add(reservation);
+                    nouvellesReportees.addAll(groupe);
+                    break;
+                }
+
+                Vehicule choisi = choisirVehiculeSprint7(
+                    vehiculesDisponibles,
+                    reservation.getNombrePassager(),
+                    trajetsParVehicule
+                );
+
+                if (choisi == null) {
+                    nouvellesReportees.add(reservation);
+                    nouvellesReportees.addAll(groupe);
+                    break;
+                }
+
+                AffectationResult resultat = affecterSurVehicule(
                     reservation,
+                    choisi,
                     heureDepartFenetre,
+                    true,
                     trajetsParVehicule,
                     placesRestantesFenetre,
-                    vehiculesUtilisesFenetre
+                    vehiculesUtilisesFenetre,
+                    prioritePaxFenetre
                 );
                 reservationsTraitees++;
 
-                if (!resultat.assignmentEffectuee) {
-                    // Seules les reservations separees sont prioritaires au prochain depart.
-                    if (estReservationSeparee(reservation)) {
-                        nouvellesReporteesPrioritaires.add(reservation);
-                    } else {
-                        nouvellesReporteesNormales.add(reservation);
-                    }
+                if (!resultat.assignee) {
+                    nouvellesReportees.add(reservation);
                     continue;
                 }
 
                 if (resultat.reliquat != null) {
-                    nouvellesReporteesPrioritaires.add(resultat.reliquat);
+                    // Le reliquat est considere comme une nouvelle reservation,
+                    // sans priorite speciale en fenetre suivante.
+                    groupe.add(resultat.reliquat);
                 }
 
                 if (resultat.fractionnee) {
                     reservationsFractionnees++;
-                    morceauxCrees += Math.max(0, resultat.morceauxAssignes - 1);
-                    passagersFractionnes += totalPax;
+                    morceauxCrees += 1;
+                    passagersFractionnes += totalPaxAvant;
+                }
+
+                trierReservationsDecroissant(groupe, prioritePaxFenetre);
+            }
+
+            for (Reservation reservation : groupe) {
+                if (reservation.getIdVehicule() == null) {
+                    nouvellesReportees.add(reservation);
                 }
             }
 
-            reporteesPrioritaires = nouvellesReporteesPrioritaires;
-            reporteesNormales = nouvellesReporteesNormales;
+            // Fenetre suivante: 0 priorite speciale -> tri sur tailles actuelles.
+            trierReservationsDecroissant(nouvellesReportees, new HashMap<>());
+            reportees = nouvellesReportees;
         }
 
         int nonAssigneesFinales = reservationDAO.findWithoutVehiculeByDate(date).size();
@@ -257,163 +310,144 @@ public class Sprint7Service {
         return fenetres;
     }
 
-    /**
-     * Retourne le nombre de morceaux crees pour cette reservation (1 = pas de fractionnement).
-     */
-    private FractionnementResult assignerAvecFractionnement(Reservation reservation,
-                                                            Timestamp heureDepart,
-                                                            Map<Integer, Integer> trajetsParVehicule,
-                                                            Map<Integer, Integer> placesRestantesFenetre,
-                                                            Map<Integer, Vehicule> vehiculesUtilisesFenetre) throws SQLException {
-        int paxRestants = reservation.getNombrePassager();
-        int chunks = 0;
-        boolean reservationPrincipaleUtilisee = false;
-        Reservation reliquatCree = null;
+    private AffectationResult affecterSurVehicule(Reservation reservation,
+                                                  Vehicule vehicule,
+                                                  Timestamp heureDepart,
+                                                  boolean nouveauVehicule,
+                                                  Map<Integer, Integer> trajetsParVehicule,
+                                                  Map<Integer, Integer> placesRestantesFenetre,
+                                                  Map<Integer, Vehicule> vehiculesUtilisesFenetre,
+                                                  Map<Integer, Integer> prioritePaxFenetre) throws SQLException {
+        int paxDemandes = reservation.getNombrePassager();
+        int prioriteInitiale = prioritePaxFenetre.getOrDefault(reservation.getId(), paxDemandes);
+        int capaciteDisponible = nouveauVehicule
+            ? vehicule.getNombrePlace()
+            : placesRestantesFenetre.getOrDefault(vehicule.getId(), 0);
 
-        while (paxRestants > 0) {
-            Vehicule choisi = choisirVehiculeDejaMobilise(
-                placesRestantesFenetre,
-                paxRestants,
-                vehiculesUtilisesFenetre,
-                trajetsParVehicule
-            );
-            boolean nouveauVehicule = false;
-
-            if (choisi == null) {
-                List<Vehicule> vehiculesDisponibles = reservationService.getVehiculesDisponibles(heureDepart, reservation.getIdHotel());
-                vehiculesDisponibles.removeIf(v -> vehiculesUtilisesFenetre.containsKey(v.getId()));
-                if (vehiculesDisponibles.isEmpty()) {
-                    break;
-                }
-
-                choisi = choisirVehiculeSprint7(
-                    vehiculesDisponibles,
-                    paxRestants,
-                    trajetsParVehicule
-                );
-                nouveauVehicule = (choisi != null);
-            }
-
-            if (choisi == null) {
-                break;
-            }
-
-            int capaciteAffectee;
-            if (placesRestantesFenetre.containsKey(choisi.getId())) {
-                capaciteAffectee = Math.min(paxRestants, placesRestantesFenetre.get(choisi.getId()));
-            } else {
-                capaciteAffectee = Math.min(paxRestants, choisi.getNombrePlace());
-            }
-
-            if (capaciteAffectee <= 0) {
-                break;
-            }
-
-            if (!reservationPrincipaleUtilisee) {
-                // La reservation d'origine devient le premier morceau.
-                reservation.setNombrePassager(capaciteAffectee);
-                reservation.setDateHeureArrivee(heureDepart);
-                reservationDAO.update(reservation);
-                reservationDAO.assignVehicule(reservation.getId(), choisi.getId());
-                reservationDAO.upsertReservationVehicule(
-                    reservation.getId(),
-                    choisi.getId(),
-                    capaciteAffectee,
-                    heureDepart
-                );
-                reservation.setIdVehicule(choisi.getId());
-                reservationPrincipaleUtilisee = true;
-            } else {
-                Reservation morceau = new Reservation();
-                morceau.setClient(reservation.getClient() + " (split)");
-                morceau.setNombrePassager(capaciteAffectee);
-                morceau.setDateHeureArrivee(heureDepart);
-                morceau.setIdHotel(reservation.getIdHotel());
-                morceau.setNomHotel(reservation.getNomHotel());
-                morceau.setIdVehicule(null);
-
-                reservationDAO.insert(morceau);
-                reservationDAO.assignVehicule(morceau.getId(), choisi.getId());
-                reservationDAO.upsertReservationVehicule(
-                    morceau.getId(),
-                    choisi.getId(),
-                    capaciteAffectee,
-                    heureDepart
-                );
-            }
-
-            if (nouveauVehicule) {
-                vehiculesUtilisesFenetre.put(choisi.getId(), choisi);
-                placesRestantesFenetre.put(choisi.getId(), choisi.getNombrePlace() - capaciteAffectee);
-                // Un nouveau vehicule mobilise dans la fenetre = un trajet de plus.
-                trajetsParVehicule.put(choisi.getId(), trajetsParVehicule.getOrDefault(choisi.getId(), 0) + 1);
-            } else {
-                int resteActuel = placesRestantesFenetre.getOrDefault(choisi.getId(), 0);
-                placesRestantesFenetre.put(choisi.getId(), Math.max(0, resteActuel - capaciteAffectee));
-            }
-
-            paxRestants -= capaciteAffectee;
-            chunks++;
+        int capaciteAffectee = Math.min(paxDemandes, Math.max(0, capaciteDisponible));
+        if (capaciteAffectee <= 0) {
+            return new AffectationResult(false, false, null);
         }
 
-        // Si une partie reste non affectee alors que la reservation principale a deja ete scindee,
-        // conserver le reliquat sous forme d'une nouvelle reservation non assignee.
-        if (paxRestants > 0 && reservationPrincipaleUtilisee) {
-            Reservation reliquat = new Reservation();
-            reliquat.setClient(reservation.getClient() + " (reste)");
-            reliquat.setNombrePassager(paxRestants);
+        reservation.setNombrePassager(capaciteAffectee);
+        reservation.setDateHeureArrivee(heureDepart);
+        reservationDAO.update(reservation);
+        reservationDAO.assignVehicule(reservation.getId(), vehicule.getId());
+        reservationDAO.upsertReservationVehicule(
+            reservation.getId(),
+            vehicule.getId(),
+            capaciteAffectee,
+            heureDepart
+        );
+        reservation.setIdVehicule(vehicule.getId());
+
+        if (nouveauVehicule) {
+            vehiculesUtilisesFenetre.put(vehicule.getId(), vehicule);
+            trajetsParVehicule.put(vehicule.getId(), trajetsParVehicule.getOrDefault(vehicule.getId(), 0) + 1);
+        }
+
+        int reste = Math.max(0, capaciteDisponible - capaciteAffectee);
+        placesRestantesFenetre.put(vehicule.getId(), reste);
+
+        Reservation reliquat = null;
+        boolean fractionnee = paxDemandes > capaciteAffectee;
+        if (fractionnee) {
+            reliquat = new Reservation();
+            reliquat.setClient(reservation.getClient() + " (split)");
+            reliquat.setNombrePassager(paxDemandes - capaciteAffectee);
             reliquat.setDateHeureArrivee(heureDepart);
             reliquat.setIdHotel(reservation.getIdHotel());
             reliquat.setNomHotel(reservation.getNomHotel());
             reliquat.setIdVehicule(null);
             reservationDAO.insert(reliquat);
-            reliquatCree = reliquat;
+            prioritePaxFenetre.put(reliquat.getId(), prioriteInitiale);
         }
 
-        // Aucun vehicule n'a ete assigne: reservation d'origine intacte.
-        if (chunks == 0) {
-            return new FractionnementResult(0, false, false, null);
-        }
-
-        boolean fractionnee = chunks > 1 || reliquatCree != null;
-        return new FractionnementResult(chunks, true, fractionnee, reliquatCree);
+        return new AffectationResult(true, fractionnee, reliquat);
     }
 
-    private Vehicule choisirVehiculeDejaMobilise(Map<Integer, Integer> placesRestantesFenetre,
-                                                 int passagers,
-                                                 Map<Integer, Vehicule> vehiculesUtilisesFenetre,
-                                                 Map<Integer, Integer> trajetsParVehicule) {
+    private void trierReservationsDecroissant(List<Reservation> reservations,
+                                              Map<Integer, Integer> prioritePaxFenetre) {
+        reservations.sort((a, b) -> {
+            int prioriteA = prioritePaxFenetre.getOrDefault(a.getId(), a.getNombrePassager());
+            int prioriteB = prioritePaxFenetre.getOrDefault(b.getId(), b.getNombrePassager());
+
+            int cmpPax = Integer.compare(prioriteB, prioriteA);
+            if (cmpPax != 0) {
+                return cmpPax;
+            }
+
+            // A egalite de taille: la reservation non splittee passe d'abord.
+            boolean splitA = estReservationSeparee(a);
+            boolean splitB = estReservationSeparee(b);
+            if (splitA != splitB) {
+                return splitA ? 1 : -1;
+            }
+
+            int cmpDate = a.getDateHeureArrivee().compareTo(b.getDateHeureArrivee());
+            if (cmpDate != 0) {
+                return cmpDate;
+            }
+            return Integer.compare(a.getId(), b.getId());
+        });
+    }
+
+    private Reservation extraireReservationPlusProche(List<Reservation> reservations, int placesCibles) {
+        if (reservations == null || reservations.isEmpty() || placesCibles <= 0) {
+            return null;
+        }
+
+        Reservation meilleure = null;
+        int indexMeilleur = -1;
+        int meilleureDistance = Integer.MAX_VALUE;
+
+        for (int i = 0; i < reservations.size(); i++) {
+            Reservation courante = reservations.get(i);
+            if (courante.getIdVehicule() != null) {
+                continue;
+            }
+
+            int pax = courante.getNombrePassager();
+            int distance = Math.abs(pax - placesCibles);
+
+            if (distance < meilleureDistance) {
+                meilleureDistance = distance;
+                meilleure = courante;
+                indexMeilleur = i;
+            } else if (distance == meilleureDistance && meilleure != null) {
+                if (pax > meilleure.getNombrePassager()) {
+                    // Egalite de distance: prendre la plus grande reservation.
+                    meilleure = courante;
+                    indexMeilleur = i;
+                } else if (pax == meilleure.getNombrePassager()) {
+                    boolean splitCourante = estReservationSeparee(courante);
+                    boolean splitMeilleure = estReservationSeparee(meilleure);
+                    if (splitCourante != splitMeilleure) {
+                        if (!splitCourante) {
+                            meilleure = courante;
+                            indexMeilleur = i;
+                        }
+                    } else if (courante.getDateHeureArrivee().before(meilleure.getDateHeureArrivee())
+                        || (courante.getDateHeureArrivee().equals(meilleure.getDateHeureArrivee()) && courante.getId() < meilleure.getId())) {
+                        meilleure = courante;
+                        indexMeilleur = i;
+                    }
+                }
+            }
+        }
+
+        if (indexMeilleur >= 0) {
+            reservations.remove(indexMeilleur);
+        }
+        return meilleure;
+    }
+
+    private Vehicule choisirVehiculePartiellementRempli(Map<Integer, Integer> placesRestantesFenetre,
+                                                        Map<Integer, Vehicule> vehiculesUtilisesFenetre,
+                                                        Map<Integer, Integer> trajetsParVehicule) {
         Vehicule meilleur = null;
-        int meilleurReste = Integer.MAX_VALUE;
+        int meilleurReste = -1;
 
-        // Priorite 1: un vehicule deja mobilise qui absorbe totalement le besoin.
-        for (Map.Entry<Integer, Integer> entry : placesRestantesFenetre.entrySet()) {
-            int vehiculeId = entry.getKey();
-            int reste = entry.getValue();
-            if (reste < passagers) {
-                continue;
-            }
-
-            Vehicule candidat = vehiculesUtilisesFenetre.get(vehiculeId);
-            if (candidat == null) {
-                continue;
-            }
-
-            if (reste < meilleurReste) {
-                meilleurReste = reste;
-                meilleur = candidat;
-            } else if (reste == meilleurReste && meilleur != null
-                && comparerPrioriteCharge(candidat, meilleur, trajetsParVehicule) < 0) {
-                meilleur = candidat;
-            }
-        }
-
-        if (meilleur != null) {
-            return meilleur;
-        }
-
-        // Priorite 2: fractionnement sur un vehicule deja mobilise (prendre le plus grand reste).
-        int maxReste = -1;
         for (Map.Entry<Integer, Integer> entry : placesRestantesFenetre.entrySet()) {
             int vehiculeId = entry.getKey();
             int reste = entry.getValue();
@@ -426,10 +460,10 @@ public class Sprint7Service {
                 continue;
             }
 
-            if (reste > maxReste) {
-                maxReste = reste;
+            if (reste > meilleurReste) {
+                meilleurReste = reste;
                 meilleur = candidat;
-            } else if (reste == maxReste && meilleur != null
+            } else if (reste == meilleurReste && meilleur != null
                 && comparerPrioriteCharge(candidat, meilleur, trajetsParVehicule) < 0) {
                 meilleur = candidat;
             }

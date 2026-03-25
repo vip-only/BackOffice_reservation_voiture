@@ -9,6 +9,7 @@ import com.itu.demo.tools.ModelView;
 import com.backoffice.dao.VehiculeDAO;
 import com.backoffice.model.Vehicule;
 
+import java.sql.Time;
 import java.util.List;
 
 @Controller
@@ -74,11 +75,13 @@ public class VehiculeController {
     @PostMapping("/vehicule/insert")
     public ModelView insertVehicule(@RequestParam("reference") String reference,
                                     @RequestParam("nombre_place") String nombrePlaceStr,
-                                    @RequestParam("type_carburant") String typeCarburant) {
+                                    @RequestParam("type_carburant") String typeCarburant,
+                                    @RequestParam("heure_disponibilite") String heureDisponibiliteStr) {
         ModelView mv = new ModelView("vehicule.jsp");
         try {
             int nombrePlace = Integer.parseInt(nombrePlaceStr);
-            Vehicule vehicule = new Vehicule(reference, nombrePlace, typeCarburant);
+            Time heureDisponibilite = parseTime(heureDisponibiliteStr);
+            Vehicule vehicule = new Vehicule(reference, nombrePlace, typeCarburant, heureDisponibilite);
 
             VehiculeDAO vehiculeDAO = new VehiculeDAO();
             vehiculeDAO.insert(vehicule);
@@ -99,12 +102,14 @@ public class VehiculeController {
     public ModelView updateVehicule(@RequestParam("id") String idStr,
                                     @RequestParam("reference") String reference,
                                     @RequestParam("nombre_place") String nombrePlaceStr,
-                                    @RequestParam("type_carburant") String typeCarburant) {
+                                    @RequestParam("type_carburant") String typeCarburant,
+                                    @RequestParam("heure_disponibilite") String heureDisponibiliteStr) {
         ModelView mv = new ModelView("vehicule.jsp");
         try {
             int id = Integer.parseInt(idStr);
             int nombrePlace = Integer.parseInt(nombrePlaceStr);
-            Vehicule vehicule = new Vehicule(id, reference, nombrePlace, typeCarburant);
+            Time heureDisponibilite = parseTime(heureDisponibiliteStr);
+            Vehicule vehicule = new Vehicule(id, reference, nombrePlace, typeCarburant, heureDisponibilite);
 
             VehiculeDAO vehiculeDAO = new VehiculeDAO();
             vehiculeDAO.update(vehicule);
@@ -138,5 +143,16 @@ public class VehiculeController {
             e.printStackTrace();
         }
         return mv;
+    }
+
+    private Time parseTime(String heure) {
+        if (heure == null || heure.trim().isEmpty()) {
+            return Time.valueOf("00:00:00");
+        }
+        String value = heure.trim();
+        if (value.length() == 5) {
+            value = value + ":00";
+        }
+        return Time.valueOf(value);
     }
 }
