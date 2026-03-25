@@ -16,113 +16,353 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>BackOffice - Planification</title>
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            padding: 20px;
-        }
-        .container {
-            background: white; padding: 30px; border-radius: 10px;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.2);
-            max-width: 1200px; margin: 0 auto;
-        }
-        h1 { color: #667eea; margin-bottom: 10px; text-align: center; }
-        h2 {
-            color: #667eea; margin-top: 30px; margin-bottom: 15px;
-            font-size: 20px; border-bottom: 2px solid #667eea; padding-bottom: 8px;
-        }
-        .alert-success {
-            background: #d4edda; color: #155724; padding: 12px 15px;
-            border-radius: 5px; margin-bottom: 20px; border-left: 4px solid #28a745;
-        }
-        .alert-error {
-            background: #f8d7da; color: #721c24; padding: 12px 15px;
-            border-radius: 5px; margin-bottom: 20px; border-left: 4px solid #dc3545;
-        }
-        .actions-bar {
-            display: flex; justify-content: space-between; align-items: center;
-            margin-bottom: 20px; flex-wrap: wrap; gap: 15px;
-        }
-        .date-form { display: flex; gap: 10px; align-items: center; }
-        .date-form input { padding: 10px; border: 2px solid #e0e0e0; border-radius: 5px; font-size: 14px; }
-        .btn-group { display: flex; gap: 10px; flex-wrap: wrap; }
-        .btn {
-            padding: 10px 20px; border: none; border-radius: 5px;
-            font-size: 14px; font-weight: 600; cursor: pointer;
-            text-decoration: none; display: inline-block; transition: transform 0.2s;
-        }
-        .btn:hover { transform: translateY(-2px); }
-        .btn-primary { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; }
-        .btn-success { background: #28a745; color: white; }
-        .btn-info { background: #17a2b8; color: white; }
-        .btn-secondary { background: #6c757d; color: white; }
-        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-        th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid #e0e0e0; }
-        th { background: #667eea; color: white; font-weight: 600; }
-        tr:hover { background: #f5f5f5; }
-        .badge { padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: 600; }
-        .badge-diesel { background: #333; color: white; }
-        .badge-essence { background: #28a745; color: white; }
-        .badge-hybride { background: #17a2b8; color: white; }
-        .badge-electrique { background: #007bff; color: white; }
-        .time-display { font-weight: 600; color: #667eea; }
-        .back-link {
-            display: block; text-align: center; margin-top: 20px;
-            color: #667eea; text-decoration: none; font-weight: 500;
-        }
-        .back-link:hover { text-decoration: underline; }
-        .empty-state { text-align: center; color: #999; padding: 30px; font-style: italic; }
-        .info-box {
-            background: #f0f4ff; padding: 15px; border-radius: 5px;
-            margin-bottom: 20px; border-left: 4px solid #667eea;
-        }
+        /* ================================================================
+   PLANIFICATION – CSS PROFESSIONNEL
+   Remplace uniquement le bloc <style> de la JSP.
+   Aucun code Java / JSP modifié.
+   Palette : fond blanc cassé / surfaces gris clair / accent indigo
+   ================================================================ */
 
-        .vehicule-card { border: 2px solid #e0e0e0; border-radius: 8px; margin-bottom: 20px; overflow: hidden; }
-        .vehicule-card-header {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white; padding: 15px 20px;
-            display: flex; justify-content: space-between; align-items: center;
-            flex-wrap: wrap; gap: 10px;
-        }
-        .vehicule-card-header h3 { color: white; margin: 0; font-size: 18px; }
-        .vehicule-meta { display: flex; gap: 15px; font-size: 13px; }
-        .vehicule-meta span { background: rgba(255,255,255,0.2); padding: 4px 10px; border-radius: 4px; }
-        .vehicule-card-body { padding: 15px 20px; }
-        .passagers-section { margin-bottom: 15px; }
-        .passagers-section h4 { color: #555; font-size: 14px; margin-bottom: 8px; }
+* { margin: 0; padding: 0; box-sizing: border-box; }
 
-        .itineraire { position: relative; padding-left: 30px; margin: 15px 0; }
-        .itineraire::before {
-            content: ''; position: absolute; left: 10px; top: 0; bottom: 0;
-            width: 3px; background: #667eea;
-        }
-        .etape {
-            position: relative; margin-bottom: 15px; padding: 10px 15px;
-            background: #f8f9ff; border-radius: 6px; border-left: 3px solid #667eea;
-        }
-        .etape::before {
-            content: ''; position: absolute; left: -26px; top: 14px;
-            width: 12px; height: 12px; border-radius: 50%;
-            background: #667eea; border: 2px solid white;
-        }
-        .etape-retour { border-left-color: #28a745; }
-        .etape-retour::before { background: #28a745; }
-        .etape-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; }
-        .etape-trajet { font-weight: 600; color: #333; }
-        .etape-heure { color: #667eea; font-weight: 600; }
-        .etape-details { font-size: 13px; color: #666; }
-        .etape-passagers { font-size: 13px; color: #333; margin-top: 4px; }
+body {
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    background: #f0f2f5;
+    min-height: 100vh;
+    padding: 28px 16px;
+    color: #1a1d23;
+}
 
-        .horaires-resume {
-            display: flex; gap: 20px; padding: 12px 15px;
-            background: #f0f4ff; border-radius: 6px; margin-top: 10px; flex-wrap: wrap;
-        }
-        .horaire-item { display: flex; flex-direction: column; align-items: center; }
-        .horaire-label { font-size: 11px; color: #666; text-transform: uppercase; }
-        .horaire-value { font-size: 16px; font-weight: 700; color: #667eea; }
-        .horaire-value.retour { color: #28a745; }
+/* ── Conteneur principal ── */
+.container {
+    background: #ffffff;
+    padding: 36px 40px;
+    border-radius: 12px;
+    border: 1px solid #e2e5ea;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+/* ── Titres ── */
+h1 {
+    color: #1a1d23;
+    margin-bottom: 6px;
+    text-align: center;
+    font-size: 22px;
+    font-weight: 600;
+    letter-spacing: -0.3px;
+}
+
+h2 {
+    color: #1a1d23;
+    margin-top: 36px;
+    margin-bottom: 14px;
+    font-size: 15px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    border-bottom: 1.5px solid #e2e5ea;
+    padding-bottom: 8px;
+}
+
+/* ── Alertes ── */
+.alert-success {
+    background: #f0faf4;
+    color: #1a6b3c;
+    padding: 12px 16px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+    border-left: 3px solid #2d9c5f;
+    font-size: 14px;
+}
+
+.alert-error {
+    background: #fdf2f2;
+    color: #8b1a1a;
+    padding: 12px 16px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+    border-left: 3px solid #d94040;
+    font-size: 14px;
+}
+
+/* ── Barre d'actions ── */
+.actions-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.date-form { display: flex; gap: 10px; align-items: center; }
+
+.date-form label {
+    font-size: 13px;
+    font-weight: 500;
+    color: #5a6070;
+}
+
+.date-form input {
+    padding: 9px 12px;
+    border: 1px solid #d1d5db;
+    border-radius: 7px;
+    font-size: 14px;
+    color: #1a1d23;
+    background: #fafbfc;
+    transition: border-color 0.15s;
+}
+
+.date-form input:focus {
+    outline: none;
+    border-color: #4f63d2;
+    background: #fff;
+}
+
+.btn-group { display: flex; gap: 8px; flex-wrap: wrap; }
+
+.btn {
+    padding: 9px 18px;
+    border: none;
+    border-radius: 7px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-block;
+    transition: opacity 0.15s, transform 0.1s;
+    letter-spacing: 0.1px;
+}
+
+.btn:hover { opacity: 0.88; transform: translateY(-1px); }
+.btn:active { transform: translateY(0); }
+
+.btn-primary  { background: #4f63d2; color: #fff; }
+.btn-success  { background: #2d9c5f; color: #fff; }
+.btn-info     { background: #0e7faa; color: #fff; }
+.btn-secondary{ background: #6b7280; color: #fff; }
+
+/* ── Info-box ── */
+.info-box {
+    background: #f5f7ff;
+    padding: 14px 16px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+    border-left: 3px solid #4f63d2;
+    font-size: 13.5px;
+    color: #3a4060;
+    line-height: 1.6;
+}
+
+.info-box strong { color: #1a1d23; }
+
+/* ── Tables ── */
+table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 13.5px; }
+
+th {
+    background: #f5f6fa;
+    color: #4b5263;
+    font-weight: 600;
+    font-size: 11.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 10px 13px;
+    text-align: left;
+    border-bottom: 1.5px solid #e2e5ea;
+}
+
+td {
+    padding: 10px 13px;
+    text-align: left;
+    border-bottom: 1px solid #f0f1f4;
+    color: #2c3040;
+}
+
+tr:last-child td { border-bottom: none; }
+tr:hover td { background: #f8f9fc; }
+
+/* ── Badges carburant ── */
+.badge {
+    padding: 3px 9px;
+    border-radius: 5px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+    display: inline-block;
+}
+
+.badge-diesel     { background: #e8e9ec; color: #2c2f38; }
+.badge-essence    { background: #e8f7ee; color: #1a6b3c; }
+.badge-hybride    { background: #e1f4fb; color: #0a5a7a; }
+.badge-electrique { background: #eaedff; color: #3040a0; }
+
+/* ── Heure mise en valeur ── */
+.time-display { font-weight: 600; color: #4f63d2; font-size: 13px; }
+
+/* ── État vide ── */
+.empty-state {
+    text-align: center;
+    color: #9ba3b2;
+    padding: 28px;
+    font-style: italic;
+    font-size: 13.5px;
+}
+
+/* ── Lien retour ── */
+.back-link {
+    display: block;
+    text-align: center;
+    margin-top: 28px;
+    color: #4f63d2;
+    text-decoration: none;
+    font-weight: 500;
+    font-size: 13.5px;
+}
+
+.back-link:hover { text-decoration: underline; }
+
+/* ── Carte véhicule ── */
+.vehicule-card {
+    border: 1px solid #e2e5ea;
+    border-radius: 10px;
+    margin-bottom: 24px;
+    overflow: hidden;
+}
+
+.vehicule-card-header {
+    background: #1e2540;
+    color: #e8ecf5;
+    padding: 14px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.vehicule-card-header h3 {
+    color: #e8ecf5;
+    margin: 0;
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: 0.2px;
+}
+
+.vehicule-meta { display: flex; gap: 10px; font-size: 12px; }
+
+.vehicule-meta span {
+    background: rgba(255,255,255,0.1);
+    border: 1px solid rgba(255,255,255,0.15);
+    padding: 3px 10px;
+    border-radius: 5px;
+    color: #c8cfe8;
+}
+
+.vehicule-card-body { padding: 18px 20px; background: #fff; }
+
+.passagers-section { margin-bottom: 18px; }
+
+.passagers-section h4 {
+    color: #6b7280;
+    font-size: 11.5px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 10px;
+}
+
+/* ── Itinéraire ── */
+.itineraire {
+    position: relative;
+    padding-left: 28px;
+    margin: 14px 0;
+}
+
+.itineraire::before {
+    content: '';
+    position: absolute;
+    left: 9px;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: #d1d5e8;
+}
+
+.etape {
+    position: relative;
+    margin-bottom: 12px;
+    padding: 10px 14px;
+    background: #f8f9fc;
+    border-radius: 8px;
+    border-left: 3px solid #4f63d2;
+}
+
+.etape::before {
+    content: '';
+    position: absolute;
+    left: -24px;
+    top: 13px;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #4f63d2;
+    border: 2px solid #fff;
+    box-shadow: 0 0 0 1px #4f63d2;
+}
+
+.etape-retour { border-left-color: #2d9c5f; }
+.etape-retour::before { background: #2d9c5f; box-shadow: 0 0 0 1px #2d9c5f; }
+
+.etape-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 4px;
+}
+
+.etape-trajet { font-weight: 600; color: #1a1d23; font-size: 13.5px; }
+.etape-heure  { color: #4f63d2; font-weight: 600; font-size: 13px; }
+.etape-details { font-size: 12px; color: #7a8299; }
+.etape-passagers { font-size: 12px; color: #3a4060; margin-top: 4px; }
+
+/* ── Résumé horaires ── */
+.horaires-resume {
+    display: flex;
+    gap: 20px;
+    padding: 12px 16px;
+    background: #f5f7ff;
+    border-radius: 8px;
+    margin-top: 12px;
+    flex-wrap: wrap;
+    border: 1px solid #e0e4f8;
+}
+
+.horaire-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-width: 80px;
+}
+
+.horaire-label {
+    font-size: 10.5px;
+    color: #8b93a8;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 2px;
+}
+
+.horaire-value        { font-size: 15px; font-weight: 700; color: #4f63d2; }
+.horaire-value.retour { color: #2d9c5f; }
+
+/* ── Sous-carte véhicule dans un départ ── */
+div[style*="border: 1px solid #e0e0e0"] {
+    border: 1px solid #e8eaf0 !important;
+    border-radius: 8px !important;
+    background: #fafbfc !important;
+}
 
     </style>
 </head>
