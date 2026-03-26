@@ -568,7 +568,7 @@ div[style*="border: 1px solid #e0e0e0"] {
         <table>
             <thead>
                 <tr>
-                    <th>Reservation ID</th><th>Client</th><th>Vehicule</th><th>Vehicule ID</th>
+                    <th>Client</th><th>Vehicule</th>
                     <th>Nb passagers</th><th>Hotel</th><th>Heure vol</th><th>Date assignation</th>
                 </tr>
             </thead>
@@ -582,10 +582,8 @@ div[style*="border: 1px solid #e0e0e0"] {
                         Timestamp tAss = (Timestamp) row.get("dateAssignation");
             %>
                 <tr>
-                    <td><%= row.get("reservationId") %></td>
                     <td><%= row.get("client") %></td>
                     <td><%= row.get("referenceVehicule") %></td>
-                    <td><%= row.get("vehiculeId") %></td>
                     <td><%= row.get("nbPassagers") %></td>
                     <td><%= row.get("nomHotel") %></td>
                     <td class="time-display"><%= tVol != null ? dtFormat.format(tVol) : "-" %></td>
@@ -603,8 +601,8 @@ div[style*="border: 1px solid #e0e0e0"] {
         <table>
             <thead>
                 <tr>
-                    <th>Client</th><th>Passagers</th><th>Hotel</th><th>Distance</th>
-                    <th>Vehicule</th><th>Type</th><th>Date/Heure depart</th>
+                    <th>Vehicule</th><th>Type</th><th>Client</th><th>Passagers</th><th>Hotel</th><th>Distance</th>
+                    <th>Date/Heure depart</th>
                     <th>Date/Heure retour</th><th>Duree totale</th>
                 </tr>
             </thead>
@@ -655,12 +653,12 @@ div[style*="border: 1px solid #e0e0e0"] {
                         if (retAff == null) retAff = p.getHeureRetour();
             %>
                 <tr>
+                    <td><%= r.getReferenceVehicule() %></td>
+                    <td><span class="badge <%= bc %>"><%= tl %></span></td>
                     <td><%= r.getClient() %></td>
                     <td><%= r.getNombrePassager() %></td>
                     <td><%= r.getNomHotel() %></td>
                     <td><%= String.format("%.1f", p.getDistanceKm()) %> km</td>
-                    <td><%= r.getReferenceVehicule() %></td>
-                    <td><span class="badge <%= bc %>"><%= tl %></span></td>
                     <td class="time-display"><%= depAff != null ? dtFormat.format(depAff) : "-" %></td>
                     <td class="time-display"><%= retAff != null ? dtFormat.format(retAff) : "-" %></td>
                     <td><%= p.getDureeTotaleMinutes() %> min</td>
