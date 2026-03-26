@@ -15,7 +15,7 @@ DROP TABLE IF EXISTS parametre CASCADE;
 DROP TABLE IF EXISTS vehicule CASCADE;
 DROP TABLE IF EXISTS hotel CASCADE;
 DROP TABLE IF EXISTS token CASCADE;
-
+DROP TABLE IF EXISTS reservation_vehicule CASCADE;
 
 -- =========================================
 -- 2. CREATION DES TABLES
@@ -32,7 +32,8 @@ CREATE TABLE vehicule (
     id SERIAL PRIMARY KEY,
     reference VARCHAR(50) NOT NULL UNIQUE,
     nombre_place INTEGER NOT NULL CHECK (nombre_place > 0),
-    type_carburant VARCHAR(2) NOT NULL CHECK (type_carburant IN ('D', 'ES', 'H', 'EL'))
+    type_carburant VARCHAR(2) NOT NULL CHECK (type_carburant IN ('D', 'ES', 'H', 'EL')),
+    heure_disponibilite TIME NOT NULL DEFAULT '00:00:00'
 );
 
 -- TABLE PARAMETRE
@@ -80,6 +81,16 @@ CREATE TABLE token (
 CREATE INDEX idx_token_value ON token(token);
 CREATE INDEX idx_token_expiration ON token(date_heure_expiration);
 
+CREATE TABLE reservation_vehicule (
+    id SERIAL PRIMARY KEY,
+    reservation_id INTEGER NOT NULL,
+    vehicule_id INTEGER NOT NULL,
+    nb_passagers INTEGER NOT NULL CHECK (nb_passagers > 0),
+    date_assignation TIMESTAMP NOT NULL DEFAULT NOW(),
+    CONSTRAINT fk_rv_reservation FOREIGN KEY (reservation_id) REFERENCES reservation(id) ON DELETE CASCADE,
+    CONSTRAINT fk_rv_vehicule FOREIGN KEY (vehicule_id) REFERENCES vehicule(id),
+    CONSTRAINT uq_rv UNIQUE (reservation_id, vehicule_id)
+);
 
 -- =========================================
 -- 3. INSERTION DES DONNEES DE REFERENCE
@@ -144,11 +155,12 @@ INSERT INTO distance (from_id, to_id, kilometer) VALUES
 --     ('5', '6', 6.0);    -- Carlton <-> Panorama
 
 -- Vehicules (tries par capacite et type carburant)
-INSERT INTO vehicule (reference, nombre_place, type_carburant) VALUES
-    ('vehicule1', 12, 'D'),    -- Petite voiture essence
-    ('vehicule2', 5, 'ES'),     -- Petite voiture diesel (preferee si 4 places demandees)
-    ('vehicule3', 5, 'D'),     -- Monospace diesel
-    ('vehicule4', 12, 'ES') ; -- Monospace essence
+INSERT INTO vehicule (reference, nombre_place, type_carburant, heure_disponibilite) VALUES
+    ('vehicule1', 5,  'D', '09:00:00'),
+    ('vehicule2', 5,  'ES', '09:00:00'),
+    ('vehicule3', 12, 'D',  '00:00:00'),
+    ('vehicule4', 9, 'D',  '09:00:00'),
+    ('vehicule5', 12, 'ES', '13:00:00');
     -- Tres grand bus diesel
 
 
@@ -156,7 +168,7 @@ INSERT INTO vehicule (reference, nombre_place, type_carburant) VALUES
 -- 4. VUE HISTORIQUE ASSIGNATION
 -- =========================================
 
-CREATE VIEW v_historique_assignation AS
+CREATE VIEW v_historique_assign1ation AS
 SELECT 
     r.id AS reservation_id,
     r.client,

@@ -192,6 +192,7 @@
                     <th>Reference</th>
                     <th>Nombre de places</th>
                     <th>Type carburant</th>
+                    <th>Heure dispo</th>
                     <th>Actions</th>
                 </tr>
             </thead>
@@ -213,6 +214,7 @@
                     <td><%= v.getReference() %></td>
                     <td><%= v.getNombrePlace() %></td>
                     <td><span class="badge <%= badgeClass %>"><%= v.getTypeCarburantLibelle() %></span></td>
+                    <td><%= v.getHeureDisponibilite() != null ? v.getHeureDisponibilite().toString().substring(0, 5) : "00:00" %></td>
                     <td class="actions-cell">
                         <a href="/vehicule/edit?id=<%= v.getId() %>" class="btn btn-warning">Modifier</a>
                         <form action="/vehicule/delete" method="POST" style="display:inline;" onsubmit="return confirm('Supprimer ce vehicule ?');">
@@ -226,7 +228,7 @@
                     } else {
                 %>
                 <tr>
-                    <td colspan="5" style="text-align: center; color: #999;">Aucun vehicule trouve</td>
+                    <td colspan="6" style="text-align: center; color: #999;">Aucun vehicule trouve</td>
                 </tr>
                 <%
                     }

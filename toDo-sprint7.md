@@ -15,7 +15,6 @@ Améliorer l'algorithme d'assignation en y intégrant une répartition équitabl
 - [ ] **Séparation des personnes (Fractionnement)** : Si le nombre de passagers d'une réservation dépasse la capacité du plus grand véhicule disponible, la réservation est divisée sur plusieurs véhicules.
 - [ ] **Répartition de charge** : À capacité égale, privilégier le véhicule ayant effectué le moins de trajets sur la journée en cours.
 - [ ] Conserver toutes les règles du Sprint 5 (TA, Nearest-neighbour, Ordre de dépose, etc.).
-- [ ] Mise à jour de l'algorithme `assignerVehiculesAutomatiquement()`.
 
 ### Contraintes / Règles métiers
 

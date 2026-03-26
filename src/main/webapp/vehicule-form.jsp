@@ -63,6 +63,7 @@
         }
         input[type="text"],
         input[type="number"],
+        input[type="time"],
         select {
             padding: 12px;
             border: 2px solid #e0e0e0;
@@ -147,6 +148,13 @@
                     <option value="H" <%= vehicule != null && "H".equals(vehicule.getTypeCarburant()) ? "selected" : "" %>>Hybride</option>
                     <option value="EL" <%= vehicule != null && "EL".equals(vehicule.getTypeCarburant()) ? "selected" : "" %>>Electrique</option>
                 </select>
+            </div>
+
+            <div class="form-group">
+                <label for="heure_disponibilite">Heure de disponibilite</label>
+                <input type="time" id="heure_disponibilite" name="heure_disponibilite"
+                       value="<%= (vehicule != null && vehicule.getHeureDisponibilite() != null) ? vehicule.getHeureDisponibilite().toString().substring(0,5) : "00:00" %>"
+                       required>
             </div>
 
             <button type="submit"><%= isUpdate ? "Mettre a jour" : "Ajouter" %></button>

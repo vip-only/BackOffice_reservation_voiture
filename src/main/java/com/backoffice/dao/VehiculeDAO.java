@@ -11,27 +11,29 @@ public class VehiculeDAO {
 
     // INSERT
     public void insert(Vehicule vehicule) throws SQLException {
-        String sql = "INSERT INTO vehicule (reference, nombre_place, type_carburant) VALUES (?, ?, ?)";
+        String sql = "INSERT INTO vehicule (reference, nombre_place, type_carburant, heure_disponibilite) VALUES (?, ?, ?, ?)";
 
         try (Connection conn = DBConnection.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, vehicule.getReference());
             ps.setInt(2, vehicule.getNombrePlace());
             ps.setString(3, vehicule.getTypeCarburant());
+            ps.setTime(4, vehicule.getHeureDisponibilite());
             ps.executeUpdate();
         }
     }
 
     // UPDATE
     public void update(Vehicule vehicule) throws SQLException {
-        String sql = "UPDATE vehicule SET reference = ?, nombre_place = ?, type_carburant = ? WHERE id = ?";
+        String sql = "UPDATE vehicule SET reference = ?, nombre_place = ?, type_carburant = ?, heure_disponibilite = ? WHERE id = ?";
 
         try (Connection conn = DBConnection.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, vehicule.getReference());
             ps.setInt(2, vehicule.getNombrePlace());
             ps.setString(3, vehicule.getTypeCarburant());
-            ps.setInt(4, vehicule.getId());
+            ps.setTime(4, vehicule.getHeureDisponibilite());
+            ps.setInt(5, vehicule.getId());
             ps.executeUpdate();
         }
     }
@@ -50,7 +52,7 @@ public class VehiculeDAO {
     // FIND ALL
     public List<Vehicule> findAll() throws SQLException {
         List<Vehicule> vehicules = new ArrayList<>();
-        String sql = "SELECT id, reference, nombre_place, type_carburant FROM vehicule ORDER BY reference";
+        String sql = "SELECT id, reference, nombre_place, type_carburant, heure_disponibilite FROM vehicule ORDER BY reference";
 
         try (Connection conn = DBConnection.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql);
@@ -69,7 +71,7 @@ public class VehiculeDAO {
 
     // FIND BY ID
     public Vehicule findById(int id) throws SQLException {
-        String sql = "SELECT id, reference, nombre_place, type_carburant FROM vehicule WHERE id = ?";
+        String sql = "SELECT id, reference, nombre_place, type_carburant, heure_disponibilite FROM vehicule WHERE id = ?";
         Vehicule vehicule = null;
 
         try (Connection conn = DBConnection.getConnection();
@@ -87,7 +89,7 @@ public class VehiculeDAO {
     // FILTRE PAR TYPE CARBURANT
     public List<Vehicule> findByTypeCarburant(String typeCarburant) throws SQLException {
         List<Vehicule> vehicules = new ArrayList<>();
-        String sql = "SELECT id, reference, nombre_place, type_carburant FROM vehicule WHERE type_carburant = ? ORDER BY reference";
+        String sql = "SELECT id, reference, nombre_place, type_carburant, heure_disponibilite FROM vehicule WHERE type_carburant = ? ORDER BY reference";
 
         try (Connection conn = DBConnection.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
@@ -105,7 +107,7 @@ public class VehiculeDAO {
     // RECHERCHE PAR REFERENCE (LIKE)
     public List<Vehicule> searchByReference(String keyword) throws SQLException {
         List<Vehicule> vehicules = new ArrayList<>();
-        String sql = "SELECT id, reference, nombre_place, type_carburant FROM vehicule WHERE LOWER(reference) LIKE LOWER(?) ORDER BY reference";
+        String sql = "SELECT id, reference, nombre_place, type_carburant, heure_disponibilite FROM vehicule WHERE LOWER(reference) LIKE LOWER(?) ORDER BY reference";
 
         try (Connection conn = DBConnection.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
@@ -123,7 +125,7 @@ public class VehiculeDAO {
     // FILTRE + RECHERCHE COMBINÉS
     public List<Vehicule> findWithFilters(String typeCarburant, String keyword) throws SQLException {
         List<Vehicule> vehicules = new ArrayList<>();
-        StringBuilder sql = new StringBuilder("SELECT id, reference, nombre_place, type_carburant FROM vehicule WHERE 1=1");
+        StringBuilder sql = new StringBuilder("SELECT id, reference, nombre_place, type_carburant, heure_disponibilite FROM vehicule WHERE 1=1");
 
         if (typeCarburant != null && !typeCarburant.isEmpty()) {
             sql.append(" AND type_carburant = ?");
@@ -161,6 +163,7 @@ public class VehiculeDAO {
         v.setReference(rs.getString("reference"));
         v.setNombrePlace(rs.getInt("nombre_place"));
         v.setTypeCarburant(rs.getString("type_carburant"));
+        v.setHeureDisponibilite(rs.getTime("heure_disponibilite"));
         return v;
     }
 }

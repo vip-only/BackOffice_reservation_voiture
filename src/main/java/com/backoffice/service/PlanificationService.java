@@ -647,6 +647,19 @@ public class PlanificationService {
         return max;
     }
 
+    /**
+     * Expose la logique Sprint 5 de calcul d'heure de depart effective:
+     * - base = MAX(date_heure_arrivee) du groupe
+     * - ajustement selon disponibilite d'au moins un vehicule capable
+     */
+    public Timestamp calculerHeureDepartAjustee(List<Reservation> groupe) throws SQLException {
+        if (groupe == null || groupe.isEmpty()) {
+            return null;
+        }
+        Timestamp heureDepart = calculerHeureDepart(groupe);
+        return ajusterHeureDepartSelonDisponibilite(groupe, heureDepart);
+    }
+
     private int getMaxPassagers(List<Reservation> groupe) {
         int max = 0;
         for (Reservation r : groupe) {
