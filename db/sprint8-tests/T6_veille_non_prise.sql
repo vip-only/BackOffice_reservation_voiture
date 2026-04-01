@@ -1,7 +1,6 @@
 -- T6: Reservations non assignees de la veille ne doivent pas declencher un depart immediat du jour
 
-TRUNCATE TABLE reservation_vehicule RESTART IDENTITY;
-TRUNCATE TABLE reservation RESTART IDENTITY;
+TRUNCATE TABLE reservation_vehicule, reservation RESTART IDENTITY CASCADE;
 
 -- Retour 14:00 (jour cible 2026-03-11)
 INSERT INTO reservation (client, nombre_passager, date_heure_arrivee, id_hotel, id_vehicule)

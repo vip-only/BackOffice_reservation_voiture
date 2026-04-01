@@ -1,8 +1,7 @@
 -- T4: Fractionnement lors d'un depart immediat
 -- Cas: backlog contient une reservation de 11 pax, vehicule retour de 8 places
 
-TRUNCATE TABLE reservation_vehicule RESTART IDENTITY;
-TRUNCATE TABLE reservation RESTART IDENTITY;
+TRUNCATE TABLE reservation_vehicule, reservation RESTART IDENTITY CASCADE;
 
 -- Retour 14:00 (VH-RET-8)
 INSERT INTO reservation (client, nombre_passager, date_heure_arrivee, id_hotel, id_vehicule)

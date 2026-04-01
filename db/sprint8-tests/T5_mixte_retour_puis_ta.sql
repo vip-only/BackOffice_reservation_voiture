@@ -1,7 +1,6 @@
 -- T5: Cas mixte depart immediat puis fenetre TA suivante
 
-TRUNCATE TABLE reservation_vehicule RESTART IDENTITY;
-TRUNCATE TABLE reservation RESTART IDENTITY;
+TRUNCATE TABLE reservation_vehicule, reservation RESTART IDENTITY CASCADE;
 
 -- Retour 10:00 (VH-RET-8)
 INSERT INTO reservation (client, nombre_passager, date_heure_arrivee, id_hotel, id_vehicule)

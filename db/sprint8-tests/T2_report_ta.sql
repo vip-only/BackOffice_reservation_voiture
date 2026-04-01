@@ -1,7 +1,6 @@
 -- T2: Vehicule revient a 14:00, backlog = 5, capacite = 8 => PAS de depart immediat (REPORT TA)
 
-TRUNCATE TABLE reservation_vehicule RESTART IDENTITY;
-TRUNCATE TABLE reservation RESTART IDENTITY;
+TRUNCATE TABLE reservation_vehicule, reservation RESTART IDENTITY CASCADE;
 
 -- Seed retour VH-RET-8 a 14:00
 INSERT INTO reservation (client, nombre_passager, date_heure_arrivee, id_hotel, id_vehicule)
