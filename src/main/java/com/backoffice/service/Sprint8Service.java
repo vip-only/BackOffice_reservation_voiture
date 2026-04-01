@@ -1,5 +1,6 @@
 package com.backoffice.service;
 
+import com.backoffice.dao.ParametreDAO;
 import com.backoffice.dao.ReservationDAO;
 import com.backoffice.dao.VehiculeDAO;
 import com.backoffice.model.Reservation;
@@ -10,8 +11,11 @@ import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.PriorityQueue;
+import java.util.Set;
 
 /**
  * Sprint 8:
@@ -20,8 +24,10 @@ import java.util.Map;
  */
 public class Sprint8Service {
 
+    private final ParametreDAO parametreDAO = new ParametreDAO();
     private final ReservationDAO reservationDAO = new ReservationDAO();
     private final VehiculeDAO vehiculeDAO = new VehiculeDAO();
+    private final ReservationService reservationService = new ReservationService();
     private final Sprint7Service sprint7Service = new Sprint7Service();
 
     public static class ExecutionResult {
@@ -86,44 +92,147 @@ public class Sprint8Service {
         int decisionsReportTa = 0;
         int reservationsAffecteesRetour = 0;
         int reservationsFractionneesRetour = 0;
+        int taMinutes = parametreDAO.getTempsAttente();
 
-        List<Map<String, Object>> retours = reservationDAO.getVehiculeRetourEventsByDate(date);
-        for (Map<String, Object> event : retours) {
-            Integer vehiculeId = (Integer) event.get("vehiculeId");
-            Timestamp heureRetour = (Timestamp) event.get("dateHeureRetour");
-            if (vehiculeId == null || heureRetour == null) {
+        PriorityQueue<DeclenchementEvent> events = new PriorityQueue<>(Comparator
+            .comparing(DeclenchementEvent::getInstant)
+            .thenComparingInt(DeclenchementEvent::getOrder));
+        Set<String> eventKeys = new HashSet<>();
+
+        // Disponibilites initiales vehicules.
+        for (Vehicule vehicule : vehiculeDAO.findAll()) {
+            if (vehicule.getHeureDisponibilite() == null) {
+                continue;
+            }
+            Timestamp instant = Timestamp.valueOf(date.toString() + " " + vehicule.getHeureDisponibilite().toString());
+            pushEvent(events, eventKeys, new DeclenchementEvent("VEHICULE", vehicule.getId(), instant));
+        }
+
+        // Arrivees des reservations de la journee.
+        for (Reservation reservation : reservationDAO.findByDate(date)) {
+            if (reservation == null || reservation.getDateHeureArrivee() == null) {
+                continue;
+            }
+            pushEvent(events, eventKeys, new DeclenchementEvent("RESERVATION", reservation.getId(), reservation.getDateHeureArrivee()));
+        }
+
+        // Retours deja connus (seed).
+        injecterRetours(events, eventKeys, date);
+
+        Timestamp debutGroupementActif = null;
+        Timestamp finGroupementActif = null;
+
+        while (!events.isEmpty()) {
+            DeclenchementEvent event = events.poll();
+            if (event == null || event.instant == null) {
                 continue;
             }
 
-            Vehicule vehicule = vehiculeDAO.findById(vehiculeId);
-            if (vehicule == null) {
+            // Important: les nouvelles affectations peuvent creer de nouveaux retours dans la vue.
+            injecterRetours(events, eventKeys, date);
+
+            Timestamp instant = event.instant;
+            if (finGroupementActif != null && instant.after(finGroupementActif)) {
+                debutGroupementActif = null;
+                finGroupementActif = null;
+            }
+
+            if ("VEHICULE".equals(event.type)) {
+                List<Vehicule> vehiculesMemeInstant = new ArrayList<>();
+                Vehicule v0 = vehiculeDAO.findById(event.sourceId);
+                if (v0 != null) {
+                    vehiculesMemeInstant.add(v0);
+                }
+
+                while (!events.isEmpty()) {
+                    DeclenchementEvent suivant = events.peek();
+                    if (suivant == null || !"VEHICULE".equals(suivant.type) || !instant.equals(suivant.instant)) {
+                        break;
+                    }
+                    events.poll();
+                    Vehicule vx = vehiculeDAO.findById(suivant.sourceId);
+                    if (vx != null) {
+                        vehiculesMemeInstant.add(vx);
+                    }
+                }
+
+                Timestamp debutGroupement = (debutGroupementActif != null && finGroupementActif != null && !instant.after(finGroupementActif))
+                    ? debutGroupementActif
+                    : instant;
+
+                if (debutGroupementActif == null || finGroupementActif == null || instant.after(finGroupementActif)) {
+                    debutGroupementActif = debutGroupement;
+                    finGroupementActif = ajouterMinutes(debutGroupement, taMinutes);
+                }
+
+                List<Vehicule> vehiculesRestants = new ArrayList<>(vehiculesMemeInstant);
+                while (!vehiculesRestants.isEmpty()) {
+                    List<Reservation> backlog = reservationDAO.findWithoutVehiculeByDateAndBeforeTime(date, debutGroupement);
+                    if (backlog.isEmpty()) {
+                        decisionsReportTa += vehiculesRestants.size();
+                        break;
+                    }
+
+                    backlog.sort(Comparator
+                        .comparingInt(Reservation::getNombrePassager).reversed()
+                        .thenComparing(Reservation::getDateHeureArrivee)
+                        .thenComparingInt(Reservation::getId));
+
+                    Vehicule vehiculeChoisi = choisirVehiculeProcheDuPlusGrandNonAssigne(vehiculesRestants, backlog);
+                    vehiculesRestants.remove(vehiculeChoisi);
+
+                    AffectationRetourResult affectation = affecterDepartImmediat(vehiculeChoisi, backlog, debutGroupement);
+                    if (affectation.aAffecte) {
+                        departsImmediats++;
+                        reservationsAffecteesRetour += affectation.reservationsAffectees;
+                        reservationsFractionneesRetour += affectation.reservationsFractionnees;
+                        injecterRetours(events, eventKeys, date);
+                    } else {
+                        decisionsReportTa++;
+                    }
+                }
                 continue;
             }
 
-            int chargeAttente = reservationDAO.countPassagersSansVehiculeByDateAndBeforeTime(date, heureRetour);
-            if (chargeAttente < vehicule.getNombrePlace()) {
-                decisionsReportTa++;
-                continue;
-            }
+            if ("RESERVATION".equals(event.type)) {
+                Reservation reservation = reservationDAO.findById(event.sourceId);
+                if (reservation == null || reservation.getIdVehicule() != null) {
+                    continue;
+                }
 
-            List<Reservation> backlog = reservationDAO.findWithoutVehiculeByDateAndBeforeTime(date, heureRetour);
-            if (backlog.isEmpty()) {
-                continue;
-            }
+                // Si un groupement existe deja, la reservation le rejoint naturellement.
+                if (debutGroupementActif != null && finGroupementActif != null && !instant.after(finGroupementActif)) {
+                    continue;
+                }
 
-            backlog.sort(Comparator
-                .comparing((Reservation r) -> !estNonAssigneeIssueeDunSplit(r))
-                .thenComparing(Comparator.comparingInt(Reservation::getNombrePassager).reversed())
-                .thenComparing(Reservation::getDateHeureArrivee)
-                .thenComparingInt(Reservation::getId));
+                // Sinon, une nouvelle reservation peut declencher un groupement si vehicule dispo.
+                Vehicule declencheur = choisirVehiculeDeclencheur(instant, reservation);
+                if (declencheur == null) {
+                    continue;
+                }
 
-            AffectationRetourResult affectation = affecterDepartImmediat(vehicule, backlog, heureRetour);
-            if (affectation.aAffecte) {
-                departsImmediats++;
-                reservationsAffecteesRetour += affectation.reservationsAffectees;
-                reservationsFractionneesRetour += affectation.reservationsFractionnees;
-            } else {
-                decisionsReportTa++;
+                debutGroupementActif = instant;
+                finGroupementActif = ajouterMinutes(debutGroupementActif, taMinutes);
+
+                List<Reservation> backlog = reservationDAO.findWithoutVehiculeByDateAndBeforeTime(date, debutGroupementActif);
+                if (backlog.isEmpty()) {
+                    continue;
+                }
+
+                backlog.sort(Comparator
+                    .comparingInt(Reservation::getNombrePassager).reversed()
+                    .thenComparing(Reservation::getDateHeureArrivee)
+                    .thenComparingInt(Reservation::getId));
+
+                AffectationRetourResult affectation = affecterDepartImmediat(declencheur, backlog, debutGroupementActif);
+                if (affectation.aAffecte) {
+                    departsImmediats++;
+                    reservationsAffecteesRetour += affectation.reservationsAffectees;
+                    reservationsFractionneesRetour += affectation.reservationsFractionnees;
+                    injecterRetours(events, eventKeys, date);
+                } else {
+                    decisionsReportTa++;
+                }
             }
         }
 
@@ -139,6 +248,104 @@ public class Sprint8Service {
             reservationsTraiteesTotal,
             suiteSprint7.getNonAssigneesFinales()
         );
+    }
+
+    private Vehicule choisirVehiculeDeclencheur(Timestamp instant, Reservation reservation) throws SQLException {
+        List<Vehicule> disponibles = reservationService.getVehiculesDisponibles(instant, reservation.getIdHotel());
+        if (disponibles == null || disponibles.isEmpty()) {
+            return null;
+        }
+
+        disponibles.sort((a, b) -> {
+            boolean aCapable = a.getNombrePlace() >= reservation.getNombrePassager();
+            boolean bCapable = b.getNombrePlace() >= reservation.getNombrePassager();
+            if (aCapable != bCapable) {
+                return aCapable ? -1 : 1;
+            }
+
+            int cmpCap = aCapable
+                ? Integer.compare(a.getNombrePlace(), b.getNombrePlace())
+                : Integer.compare(b.getNombrePlace(), a.getNombrePlace());
+            if (cmpCap != 0) {
+                return cmpCap;
+            }
+
+            boolean dieselA = "D".equals(a.getTypeCarburant());
+            boolean dieselB = "D".equals(b.getTypeCarburant());
+            if (dieselA != dieselB) {
+                return dieselA ? -1 : 1;
+            }
+
+            return Integer.compare(a.getId(), b.getId());
+        });
+
+        return disponibles.get(0);
+    }
+
+    private void injecterRetours(PriorityQueue<DeclenchementEvent> events,
+                                 Set<String> eventKeys,
+                                 Date date) throws SQLException {
+        List<Map<String, Object>> retours = reservationDAO.getVehiculeRetourEventsByDate(date);
+        for (Map<String, Object> retour : retours) {
+            Integer vehiculeId = (Integer) retour.get("vehiculeId");
+            Timestamp heureRetour = (Timestamp) retour.get("dateHeureRetour");
+            if (vehiculeId == null || heureRetour == null) {
+                continue;
+            }
+            pushEvent(events, eventKeys, new DeclenchementEvent("VEHICULE", vehiculeId, heureRetour));
+        }
+    }
+
+    private void pushEvent(PriorityQueue<DeclenchementEvent> events,
+                           Set<String> eventKeys,
+                           DeclenchementEvent event) {
+        if (event == null || event.instant == null) {
+            return;
+        }
+        String key = event.type + "|" + event.sourceId + "|" + event.instant.getTime();
+        if (eventKeys.add(key)) {
+            events.offer(event);
+        }
+    }
+
+    private Vehicule choisirVehiculeProcheDuPlusGrandNonAssigne(List<Vehicule> vehicules,
+                                                                 List<Reservation> backlog) {
+        if (vehicules == null || vehicules.isEmpty()) {
+            return null;
+        }
+        int cible = (backlog == null || backlog.isEmpty()) ? 0 : backlog.get(0).getNombrePassager();
+
+        vehicules.sort((a, b) -> {
+            boolean aCapable = a.getNombrePlace() >= cible;
+            boolean bCapable = b.getNombrePlace() >= cible;
+            if (aCapable != bCapable) {
+                return aCapable ? -1 : 1;
+            }
+
+            int distA = Math.abs(a.getNombrePlace() - cible);
+            int distB = Math.abs(b.getNombrePlace() - cible);
+            int cmpDist = Integer.compare(distA, distB);
+            if (cmpDist != 0) {
+                return cmpDist;
+            }
+
+            boolean dieselA = "D".equals(a.getTypeCarburant());
+            boolean dieselB = "D".equals(b.getTypeCarburant());
+            if (dieselA != dieselB) {
+                return dieselA ? -1 : 1;
+            }
+
+            return Integer.compare(a.getId(), b.getId());
+        });
+
+        return vehicules.get(0);
+    }
+
+    private Timestamp ajouterMinutes(Timestamp base, int minutes) {
+        if (base == null) {
+            return null;
+        }
+        return new Timestamp(base.getTime() + minutes * 60L * 1000L);
     }
 
     private AffectationRetourResult affecterDepartImmediat(Vehicule vehicule,
@@ -213,11 +420,24 @@ public class Sprint8Service {
         }
     }
 
-    private boolean estNonAssigneeIssueeDunSplit(Reservation reservation) {
-        if (reservation == null || reservation.getClient() == null) {
-            return false;
+    private static class DeclenchementEvent {
+        private final String type; // VEHICULE | RESERVATION
+        private final int sourceId;
+        private final Timestamp instant;
+
+        private DeclenchementEvent(String type, int sourceId, Timestamp instant) {
+            this.type = type;
+            this.sourceId = sourceId;
+            this.instant = instant;
         }
-        // Couvre les cas: (split), (split)(split), etc.
-        return reservation.getClient().contains("(split)") || reservation.getClient().contains("(reste)");
+
+        private Timestamp getInstant() {
+            return instant;
+        }
+
+        private int getOrder() {
+            // Priorite aux disponibilites vehicule en cas d'egalite temporelle.
+            return "VEHICULE".equals(type) ? 0 : 1;
+        }
     }
 }

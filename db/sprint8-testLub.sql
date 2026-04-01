@@ -110,7 +110,7 @@ INSERT INTO distance (from_id, to_id, kilometer) VALUES
 -- Vehicules (tries par capacite et type carburant)
 INSERT INTO vehicule (reference, nombre_place, type_carburant, heure_disponibilite) VALUES
     ('vehicule1', 4,  'D', '00:00:00'),
-    ('vehicule2', 8,  'ES', '09:30:00');
+    ('vehicule2', 8,  'ES', '09:36:00');
 
 
 -- =========================================
