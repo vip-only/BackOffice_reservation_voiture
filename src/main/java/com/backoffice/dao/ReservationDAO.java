@@ -367,11 +367,22 @@ public class ReservationDAO {
             "    vehicule_id INTEGER NOT NULL REFERENCES vehicule(id)," +
             "    nb_passagers INTEGER NOT NULL CHECK (nb_passagers > 0)," +
             "    date_assignation TIMESTAMP NOT NULL DEFAULT NOW()," +
+            "    mode_assignation VARCHAR(20) NOT NULL DEFAULT 'NORMAL_TA' CHECK (mode_assignation IN ('NORMAL_TA', 'RETOUR_IMMEDIAT'))," +
             "    UNIQUE (reservation_id, vehicule_id)" +
             ")";
 
+        String alterSql =
+            "ALTER TABLE reservation_vehicule " +
+            "ADD COLUMN IF NOT EXISTS mode_assignation VARCHAR(20) NOT NULL DEFAULT 'NORMAL_TA' " +
+            "CHECK (mode_assignation IN ('NORMAL_TA', 'RETOUR_IMMEDIAT'))";
+
         try (Connection conn = DBConnection.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.executeUpdate();
+        }
+
+        try (Connection conn = DBConnection.getConnection();
+             PreparedStatement ps = conn.prepareStatement(alterSql)) {
             ps.executeUpdate();
         }
     }
@@ -380,12 +391,24 @@ public class ReservationDAO {
      * Journalise une assignation dans la table reservation_vehicule.
      */
     public void upsertReservationVehicule(int reservationId, int vehiculeId, int nbPassagers, Timestamp dateAssignation) throws SQLException {
+        upsertReservationVehicule(reservationId, vehiculeId, nbPassagers, dateAssignation, "NORMAL_TA");
+    }
+
+    /**
+     * Journalise une assignation avec le mode (NORMAL_TA ou RETOUR_IMMEDIAT).
+     */
+    public void upsertReservationVehicule(int reservationId,
+                                          int vehiculeId,
+                                          int nbPassagers,
+                                          Timestamp dateAssignation,
+                                          String modeAssignation) throws SQLException {
         String sql =
-            "INSERT INTO reservation_vehicule (reservation_id, vehicule_id, nb_passagers, date_assignation) " +
-            "VALUES (?, ?, ?, ?) " +
+            "INSERT INTO reservation_vehicule (reservation_id, vehicule_id, nb_passagers, date_assignation, mode_assignation) " +
+            "VALUES (?, ?, ?, ?, ?) " +
             "ON CONFLICT (reservation_id, vehicule_id) DO UPDATE SET " +
             "nb_passagers = EXCLUDED.nb_passagers, " +
-            "date_assignation = EXCLUDED.date_assignation";
+            "date_assignation = EXCLUDED.date_assignation, " +
+            "mode_assignation = EXCLUDED.mode_assignation";
 
         try (Connection conn = DBConnection.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
@@ -393,6 +416,7 @@ public class ReservationDAO {
             ps.setInt(2, vehiculeId);
             ps.setInt(3, nbPassagers);
             ps.setTimestamp(4, dateAssignation != null ? dateAssignation : new Timestamp(System.currentTimeMillis()));
+            ps.setString(5, (modeAssignation == null || modeAssignation.isEmpty()) ? "NORMAL_TA" : modeAssignation);
             ps.executeUpdate();
         }
     }
@@ -402,8 +426,8 @@ public class ReservationDAO {
      */
     public void synchroniserReservationVehiculeDepuisReservation(java.sql.Date date) throws SQLException {
         String sql =
-            "INSERT INTO reservation_vehicule (reservation_id, vehicule_id, nb_passagers, date_assignation) " +
-            "SELECT r.id, r.id_vehicule, r.nombre_passager, r.date_heure_arrivee " +
+            "INSERT INTO reservation_vehicule (reservation_id, vehicule_id, nb_passagers, date_assignation, mode_assignation) " +
+            "SELECT r.id, r.id_vehicule, r.nombre_passager, r.date_heure_arrivee, 'NORMAL_TA' " +
             "FROM reservation r " +
             "WHERE r.id_vehicule IS NOT NULL AND DATE(r.date_heure_arrivee) = ? " +
             "ON CONFLICT (reservation_id, vehicule_id) DO UPDATE SET " +
@@ -423,7 +447,7 @@ public class ReservationDAO {
     public List<Map<String, Object>> getReservationVehiculeByDate(java.sql.Date date) throws SQLException {
         List<Map<String, Object>> rows = new ArrayList<>();
         String sql =
-            "SELECT rv.reservation_id, rv.vehicule_id, rv.nb_passagers, rv.date_assignation, " +
+            "SELECT rv.reservation_id, rv.vehicule_id, rv.nb_passagers, rv.date_assignation, rv.mode_assignation, " +
             "       r.client, r.date_heure_arrivee, h.nom AS nom_hotel, v.reference AS reference_vehicule " +
             "FROM reservation_vehicule rv " +
             "JOIN reservation r ON r.id = rv.reservation_id " +
@@ -443,6 +467,7 @@ public class ReservationDAO {
                     row.put("vehiculeId", rs.getInt("vehicule_id"));
                     row.put("nbPassagers", rs.getInt("nb_passagers"));
                     row.put("dateAssignation", rs.getTimestamp("date_assignation"));
+                    row.put("modeAssignation", rs.getString("mode_assignation"));
                     row.put("client", rs.getString("client"));
                     row.put("dateHeureArrivee", rs.getTimestamp("date_heure_arrivee"));
                     row.put("nomHotel", rs.getString("nom_hotel"));
@@ -537,5 +562,81 @@ public class ReservationDAO {
             ps.setDate(1, date);
             ps.executeUpdate();
         }
+    }
+
+    /**
+     * Retourne les reservations non assignees eligibles a un instant donne.
+     */
+    public List<Reservation> findWithoutVehiculeByDateAndBeforeTime(java.sql.Date date, Timestamp instant) throws SQLException {
+        List<Reservation> reservations = new ArrayList<>();
+        String sql = "SELECT r.id, r.client, r.nombre_passager, r.date_heure_arrivee, r.id_hotel, r.id_vehicule, " +
+                     "h.nom AS nom_hotel " +
+                     "FROM reservation r " +
+                     "JOIN hotel h ON r.id_hotel = h.id_hotel " +
+                     "WHERE r.id_vehicule IS NULL AND DATE(r.date_heure_arrivee) = ? AND r.date_heure_arrivee <= ? " +
+                     "ORDER BY r.nombre_passager DESC, r.date_heure_arrivee, r.id";
+
+        try (Connection conn = DBConnection.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setDate(1, date);
+            ps.setTimestamp(2, instant);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    reservations.add(mapResultSet(rs));
+                }
+            }
+        }
+
+        return reservations;
+    }
+
+    /**
+     * Somme des passagers non assignes eligibles a un instant donne.
+     */
+    public int countPassagersSansVehiculeByDateAndBeforeTime(java.sql.Date date, Timestamp instant) throws SQLException {
+        String sql = "SELECT COALESCE(SUM(nombre_passager), 0) AS total " +
+                     "FROM reservation " +
+                     "WHERE id_vehicule IS NULL AND DATE(date_heure_arrivee) = ? AND date_heure_arrivee <= ?";
+
+        try (Connection conn = DBConnection.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setDate(1, date);
+            ps.setTimestamp(2, instant);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    return rs.getInt("total");
+                }
+            }
+        }
+
+        return 0;
+    }
+
+    /**
+     * Liste chronologique des retours vehicules observes sur la date (issues de la vue historique).
+     */
+    public List<Map<String, Object>> getVehiculeRetourEventsByDate(java.sql.Date date) throws SQLException {
+        List<Map<String, Object>> events = new ArrayList<>();
+        String sql =
+            "SELECT ha.vehicule_id, MIN(ha.date_heure_retour) AS date_heure_retour " +
+            "FROM v_historique_assignation ha " +
+            "WHERE DATE(ha.date_heure_arrivee) = ? " +
+            "GROUP BY ha.vehicule_id, ha.date_heure_retour " +
+            "ORDER BY date_heure_retour, ha.vehicule_id";
+
+        try (Connection conn = DBConnection.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setDate(1, date);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    Map<String, Object> event = new HashMap<>();
+                    event.put("vehiculeId", rs.getInt("vehicule_id"));
+                    event.put("dateHeureRetour", rs.getTimestamp("date_heure_retour"));
+                    events.add(event);
+                }
+            }
+        }
+
+        return events;
     }
 }

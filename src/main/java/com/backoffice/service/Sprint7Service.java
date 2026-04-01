@@ -89,13 +89,25 @@ public class Sprint7Service {
     }
 
     public ExecutionResult executer(Date date) throws SQLException {
+        return executerInterne(date, true, "NORMAL_TA");
+    }
+
+    public ExecutionResult executerDepuisEtatCourant(Date date, String modeAssignation) throws SQLException {
+        return executerInterne(date, false, modeAssignation == null ? "NORMAL_TA" : modeAssignation);
+    }
+
+    private ExecutionResult executerInterne(Date date,
+                                            boolean resetAvantTraitement,
+                                            String modeAssignation) throws SQLException {
         reservationDAO.ensureReservationVehiculeTable();
 
         // Recalcul complet Sprint 7 pour respecter l'ordre prioritaire dans la fenetre TA:
         // on evite de figer des choix Sprint 5 qui peuvent priver une reservation plus prioritaire.
         int nonAssigneesInitiales = reservationDAO.findWithoutVehiculeByDate(date).size();
-        reservationDAO.deleteReservationVehiculeByDate(date);
-        reservationDAO.resetAssignationsByDate(date);
+        if (resetAvantTraitement) {
+            reservationDAO.deleteReservationVehiculeByDate(date);
+            reservationDAO.resetAssignationsByDate(date);
+        }
 
         List<Reservation> reservationsDuJour = reservationDAO.findByDate(date);
         if (reservationsDuJour == null || reservationsDuJour.isEmpty()) {
@@ -178,7 +190,8 @@ public class Sprint7Service {
                             trajetsParVehicule,
                             placesRestantesFenetre,
                             vehiculesUtilisesFenetre,
-                            prioritePaxFenetre
+                            prioritePaxFenetre,
+                            modeAssignation
                         );
                         reservationsTraitees++;
 
@@ -232,7 +245,8 @@ public class Sprint7Service {
                     trajetsParVehicule,
                     placesRestantesFenetre,
                     vehiculesUtilisesFenetre,
-                    prioritePaxFenetre
+                    prioritePaxFenetre,
+                    modeAssignation
                 );
                 reservationsTraitees++;
 
@@ -317,7 +331,8 @@ public class Sprint7Service {
                                                   Map<Integer, Integer> trajetsParVehicule,
                                                   Map<Integer, Integer> placesRestantesFenetre,
                                                   Map<Integer, Vehicule> vehiculesUtilisesFenetre,
-                                                  Map<Integer, Integer> prioritePaxFenetre) throws SQLException {
+                                                  Map<Integer, Integer> prioritePaxFenetre,
+                                                  String modeAssignation) throws SQLException {
         int paxDemandes = reservation.getNombrePassager();
         int prioriteInitiale = prioritePaxFenetre.getOrDefault(reservation.getId(), paxDemandes);
         int capaciteDisponible = nouveauVehicule
@@ -337,7 +352,8 @@ public class Sprint7Service {
             reservation.getId(),
             vehicule.getId(),
             capaciteAffectee,
-            heureDepart
+            heureDepart,
+            modeAssignation
         );
         reservation.setIdVehicule(vehicule.getId());
 

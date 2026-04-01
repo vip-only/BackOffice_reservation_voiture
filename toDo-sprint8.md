@@ -20,7 +20,7 @@ vehicule qui revient + non assignees
 Ajouter une regle de reaction quand un vehicule termine un trajet et redevient disponible dans la journee.
 
 Principe metier sprint 8 (version en cours de validation):
-- Si un vehicule est disponible et qu'il existe des reservations non assignees,
+- Si un vehicule est disponible et qu'il existe des reservations non assignees(pas encore attribue),
 - et si la somme des places en attente est >= capacite du vehicule,
 - alors le vehicule repart immediatement avec un nouveau groupe.
 - Sinon, il ne part pas tout de suite et les reservations restent dans le prochain regroupement TA.

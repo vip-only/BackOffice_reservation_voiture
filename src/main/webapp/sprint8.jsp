@@ -6,7 +6,7 @@
 <%@ page import="com.backoffice.model.GroupeVehicule" %>
 <%@ page import="com.backoffice.model.GroupeVehicule.EtapeItineraire" %>
 <%@ page import="com.backoffice.model.Vehicule" %>
-<%@ page import="com.backoffice.service.Sprint7Service" %>
+<%@ page import="com.backoffice.service.Sprint8Service" %>
 <%@ page import="java.sql.Timestamp" %>
 <%@ page import="java.text.SimpleDateFormat" %>
 <!DOCTYPE html>
@@ -378,7 +378,7 @@ div[style*="border: 1px solid #e0e0e0"] {
         <% } %>
 
         <div class="actions-bar">
-            <form action="/sprint7" method="GET" class="date-form">
+            <form action="/sprint8" method="GET" class="date-form">
                 <label for="date">Date :</label>
                 <input type="date" id="date" name="date"
                        value="<%= request.getAttribute("dateSelectionnee") != null ? request.getAttribute("dateSelectionnee") : "" %>" required>
@@ -386,11 +386,11 @@ div[style*="border: 1px solid #e0e0e0"] {
             </form>
             <% if (request.getAttribute("dateSelectionnee") != null) { %>
             <div class="btn-group">
-                <form action="/sprint7/executer" method="POST" style="display:inline;">
+                <form action="/sprint8/executer" method="POST" style="display:inline;">
                     <input type="hidden" name="date" value="<%= request.getAttribute("dateSelectionnee") %>">
-                    <button type="submit" class="btn btn-success">Assigner</button>
+                    <button type="submit" class="btn btn-success">Executer Sprint 8</button>
                 </form>
-                <a href="/sprint8?date=<%= request.getAttribute("dateSelectionnee") %>" class="btn btn-secondary">Sprint 8</a>
+                <a href="/sprint7?date=<%= request.getAttribute("dateSelectionnee") %>" class="btn btn-secondary">Sprint 7</a>
                 <a href="/planification?date=<%= request.getAttribute("dateSelectionnee") %>" class="btn btn-info">Voir planification</a>
             </div>
             <% } %>
@@ -403,16 +403,17 @@ div[style*="border: 1px solid #e0e0e0"] {
         </div>
 
         <%
-            Sprint7Service.ExecutionResult resultat = (Sprint7Service.ExecutionResult) request.getAttribute("resultatSprint7");
+            Sprint8Service.ExecutionResult resultat = (Sprint8Service.ExecutionResult) request.getAttribute("resultatSprint8");
             if (resultat != null) {
         %>
         <div class="info-box">
-            <strong>Résumé Sprint 7 :</strong>
+            <strong>Resume Sprint 8 :</strong>
             Non assignées initiales = <%= resultat.getNonAssigneesInitiales() %>,
-            Réservations traitées = <%= resultat.getReservationsTraitees() %>,
-            Réservations fractionnées = <%= resultat.getReservationsFractionnees() %>,
-            Morceaux créés = <%= resultat.getMorceauxCrees() %>,
-            Passagers fractionnés = <%= resultat.getPassagersFractionnes() %>,
+            Departs immediats = <%= resultat.getDepartsImmediats() %>,
+            Decisions report TA = <%= resultat.getDecisionsReportTa() %>,
+            Reservations affectees au retour = <%= resultat.getReservationsAffecteesRetour() %>,
+            Reservations fractionnees au retour = <%= resultat.getReservationsFractionneesRetour() %>,
+            Reservations traitees total = <%= resultat.getReservationsTraiteesTotal() %>,
             Non assignées finales = <%= resultat.getNonAssigneesFinales() %>.
         </div>
         <% } %>
