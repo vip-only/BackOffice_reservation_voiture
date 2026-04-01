@@ -28,6 +28,7 @@ public class Sprint8Service {
     private final ReservationDAO reservationDAO = new ReservationDAO();
     private final VehiculeDAO vehiculeDAO = new VehiculeDAO();
     private final ReservationService reservationService = new ReservationService();
+    private final PlanificationService planificationService = new PlanificationService();
     private final Sprint7Service sprint7Service = new Sprint7Service();
 
     public static class ExecutionResult {
@@ -181,7 +182,13 @@ public class Sprint8Service {
                     Vehicule vehiculeChoisi = choisirVehiculeProcheDuPlusGrandNonAssigne(vehiculesRestants, backlog);
                     vehiculesRestants.remove(vehiculeChoisi);
 
-                    AffectationRetourResult affectation = affecterDepartImmediat(vehiculeChoisi, backlog, debutGroupement);
+                    AffectationRetourResult affectation = affecterSelonReglesDepart(
+                        date,
+                        vehiculeChoisi,
+                        backlog,
+                        debutGroupement,
+                        taMinutes
+                    );
                     if (affectation.aAffecte) {
                         departsImmediats++;
                         reservationsAffecteesRetour += affectation.reservationsAffectees;
@@ -224,7 +231,13 @@ public class Sprint8Service {
                     .thenComparing(Reservation::getDateHeureArrivee)
                     .thenComparingInt(Reservation::getId));
 
-                AffectationRetourResult affectation = affecterDepartImmediat(declencheur, backlog, debutGroupementActif);
+                AffectationRetourResult affectation = affecterSelonReglesDepart(
+                    date,
+                    declencheur,
+                    backlog,
+                    debutGroupementActif,
+                    taMinutes
+                );
                 if (affectation.aAffecte) {
                     departsImmediats++;
                     reservationsAffecteesRetour += affectation.reservationsAffectees;
@@ -348,16 +361,20 @@ public class Sprint8Service {
         return new Timestamp(base.getTime() + minutes * 60L * 1000L);
     }
 
-    private AffectationRetourResult affecterDepartImmediat(Vehicule vehicule,
-                                                            List<Reservation> backlog,
-                                                            Timestamp heureRetour) throws SQLException {
+    private AffectationRetourResult affecterSelonReglesDepart(Date date,
+                                                              Vehicule vehicule,
+                                                              List<Reservation> backlogNonAssigne,
+                                                              Timestamp debutGroupement,
+                                                              int taMinutes) throws SQLException {
         int placesRestantes = vehicule.getNombrePlace();
         int reservationsAffectees = 0;
         int reservationsFractionnees = 0;
         boolean aAffecte = false;
 
-        List<Reservation> copie = new ArrayList<>(backlog);
-        for (Reservation reservation : copie) {
+        List<AffectationCandidate> candidats = new ArrayList<>();
+
+        // 1) Priorite non assignes (ordre decroissant deja fourni par backlog).
+        for (Reservation reservation : new ArrayList<>(backlogNonAssigne)) {
             if (placesRestantes <= 0) {
                 break;
             }
@@ -377,26 +394,115 @@ public class Sprint8Service {
                 continue;
             }
 
-            relecture.setNombrePassager(paxAffectes);
-            relecture.setDateHeureArrivee(heureRetour);
+            candidats.add(new AffectationCandidate(relecture, paxDemandes, paxAffectes));
+            placesRestantes -= paxAffectes;
+        }
+
+        // 2) Si non plein, on regarde les nouvelles reservations dans [debut, debut+TA].
+        Timestamp finFenetre = ajouterMinutes(debutGroupement, taMinutes);
+        List<Reservation> nouvellesFenetre = new ArrayList<>();
+        for (Reservation r : reservationDAO.findByDate(date)) {
+            if (r == null || r.getIdVehicule() != null || r.getDateHeureArrivee() == null) {
+                continue;
+            }
+            if (r.getDateHeureArrivee().after(debutGroupement) && !r.getDateHeureArrivee().after(finFenetre)) {
+                nouvellesFenetre.add(r);
+            }
+        }
+        nouvellesFenetre.sort(Comparator
+            .comparingInt(Reservation::getNombrePassager).reversed()
+            .thenComparing(Reservation::getDateHeureArrivee)
+            .thenComparingInt(Reservation::getId));
+
+        boolean pleinApresNonAssignes = placesRestantes == 0;
+        if (!pleinApresNonAssignes && !nouvellesFenetre.isEmpty()) {
+            Set<Integer> idsPris = new HashSet<>();
+            for (AffectationCandidate c : candidats) {
+                idsPris.add(c.reservation.getId());
+            }
+
+            for (Reservation reservation : nouvellesFenetre) {
+                if (placesRestantes <= 0) {
+                    break;
+                }
+                if (idsPris.contains(reservation.getId())) {
+                    continue;
+                }
+
+                Reservation relecture = reservationDAO.findById(reservation.getId());
+                if (relecture == null || relecture.getIdVehicule() != null) {
+                    continue;
+                }
+
+                int paxDemandes = relecture.getNombrePassager();
+                if (paxDemandes <= 0) {
+                    continue;
+                }
+
+                int paxAffectes = Math.min(paxDemandes, placesRestantes);
+                if (paxAffectes <= 0) {
+                    continue;
+                }
+
+                candidats.add(new AffectationCandidate(relecture, paxDemandes, paxAffectes));
+                idsPris.add(relecture.getId());
+                placesRestantes -= paxAffectes;
+            }
+        }
+
+        if (candidats.isEmpty()) {
+            return new AffectationRetourResult(false, 0, 0);
+        }
+
+        // Regle demandee:
+        // - depart immediat si le vehicule est rempli directement par non assignes.
+        // - sinon, depart groupe avec TA (logique proche sprint7).
+        Timestamp heureDepart;
+        String modeAssignation;
+        if (pleinApresNonAssignes) {
+            heureDepart = debutGroupement;
+            modeAssignation = "RETOUR_IMMEDIAT";
+        } else {
+            List<Reservation> groupeTemp = new ArrayList<>();
+            for (AffectationCandidate c : candidats) {
+                Reservation temp = new Reservation();
+                temp.setId(c.reservation.getId());
+                temp.setDateHeureArrivee(c.reservation.getDateHeureArrivee());
+                temp.setNombrePassager(c.paxAffectes);
+                temp.setIdHotel(c.reservation.getIdHotel());
+                groupeTemp.add(temp);
+            }
+            Timestamp heureAjustee = planificationService.calculerHeureDepartAjustee(groupeTemp);
+            heureDepart = heureAjustee != null ? heureAjustee : finFenetre;
+            modeAssignation = "NORMAL_TA";
+        }
+
+        for (AffectationCandidate candidate : candidats) {
+            Reservation relecture = reservationDAO.findById(candidate.reservation.getId());
+            if (relecture == null || relecture.getIdVehicule() != null) {
+                continue;
+            }
+
+            relecture.setNombrePassager(candidate.paxAffectes);
+            relecture.setDateHeureArrivee(heureDepart);
             reservationDAO.update(relecture);
             reservationDAO.assignVehicule(relecture.getId(), vehicule.getId());
             reservationDAO.upsertReservationVehicule(
                 relecture.getId(),
                 vehicule.getId(),
-                paxAffectes,
-                heureRetour
+                candidate.paxAffectes,
+                heureDepart,
+                modeAssignation
             );
 
             aAffecte = true;
             reservationsAffectees++;
-            placesRestantes -= paxAffectes;
 
-            if (paxDemandes > paxAffectes) {
+            if (candidate.paxDemandes > candidate.paxAffectes) {
                 Reservation reliquat = new Reservation();
                 reliquat.setClient(relecture.getClient() + " (split)");
-                reliquat.setNombrePassager(paxDemandes - paxAffectes);
-                reliquat.setDateHeureArrivee(heureRetour);
+                reliquat.setNombrePassager(candidate.paxDemandes - candidate.paxAffectes);
+                reliquat.setDateHeureArrivee(heureDepart);
                 reliquat.setIdHotel(relecture.getIdHotel());
                 reliquat.setNomHotel(relecture.getNomHotel());
                 reliquat.setIdVehicule(null);
@@ -417,6 +523,18 @@ public class Sprint8Service {
             this.aAffecte = aAffecte;
             this.reservationsAffectees = reservationsAffectees;
             this.reservationsFractionnees = reservationsFractionnees;
+        }
+    }
+
+    private static class AffectationCandidate {
+        private final Reservation reservation;
+        private final int paxDemandes;
+        private final int paxAffectes;
+
+        private AffectationCandidate(Reservation reservation, int paxDemandes, int paxAffectes) {
+            this.reservation = reservation;
+            this.paxDemandes = paxDemandes;
+            this.paxAffectes = paxAffectes;
         }
     }
 
