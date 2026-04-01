@@ -1,12 +1,3 @@
--- =========================================
--- SCRIPT DE REINITIALISATION COMPLETE
--- Date: 11-03-2026
--- Scénario de test pour l'assignation automatique
--- =========================================
-
--- =========================================
--- 1. SUPPRESSION DES TABLES (ordre inverse des dépendances)
--- =========================================
 DROP VIEW IF EXISTS v_historique_assignation CASCADE;
 DROP TABLE IF EXISTS reservation CASCADE;
 DROP TABLE IF EXISTS distance CASCADE;
@@ -112,17 +103,14 @@ INSERT INTO parametre (cle, valeur, unite) VALUES
 
 -- Distances depuis TNR (aeroport)
 INSERT INTO distance (from_id, to_id, kilometer) VALUES 
-    ('TNR', '1', 90.0),
+    ('TNR', '1', 40.0),
     ('TNR', '2', 35.0),   -- TNR -> Novotel: 22.5 km
     ('1', '2', 60.0);   -- TNR -> Ibis: 18 km
     
 -- Vehicules (tries par capacite et type carburant)
 INSERT INTO vehicule (reference, nombre_place, type_carburant, heure_disponibilite) VALUES
-    ('vehicule1', 5,  'D', '09:00:00'),
-    ('vehicule2', 5,  'ES', '09:00:00'),
-    ('vehicule3', 12, 'D',  '00:00:00'),
-    ('vehicule4', 9, 'D',  '09:00:00'),
-    ('vehicule5', 12, 'ES', '13:00:00');
+    ('vehicule1', 4,  'D', '00:00:00'),
+    ('vehicule2', 8,  'ES', '09:30:00');
 
 
 -- =========================================
@@ -155,20 +143,12 @@ ORDER BY r.date_heure_arrivee;
 
 -- TEST 1: Regles de base (F1, F2, F3) - Diesel prefere
 INSERT INTO reservation (client, nombre_passager, date_heure_arrivee, id_hotel) VALUES
-    ('Client1', 7, '2026-03-19 09:00:00', 1);
+    ('Client1', 14, '2026-03-19 08:00:00', 1);
 
 INSERT INTO reservation (client, nombre_passager, date_heure_arrivee, id_hotel) VALUES
-    ('Client2', 20, '2026-03-19 08:00:00', 2);
+    ('Client2', 12, '2026-03-19 08:05:00', 1);
 
 INSERT INTO reservation (client, nombre_passager, date_heure_arrivee, id_hotel) VALUES
-    ('Client3', 3, '2026-03-19 09:10:00', 1);
+    ('Client3', 2, '2026-03-19 12:10:00', 1);
 
-INSERT INTO reservation (client, nombre_passager, date_heure_arrivee, id_hotel) VALUES
-    ('Client4', 10, '2026-03-19 09:15:00', 1);
-
-INSERT INTO reservation (client, nombre_passager, date_heure_arrivee, id_hotel) VALUES
-    ('Client5',5, '2026-03-19 09:20:00', 1);
-
-INSERT INTO reservation (client, nombre_passager, date_heure_arrivee, id_hotel) VALUES
-    ('Client6', 12, '2026-03-19 13:30:00', 1);
 

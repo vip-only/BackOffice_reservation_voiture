@@ -112,7 +112,8 @@ public class Sprint8Service {
             }
 
             backlog.sort(Comparator
-                .comparingInt(Reservation::getNombrePassager).reversed()
+                .comparing((Reservation r) -> !estNonAssigneeIssueeDunSplit(r))
+                .thenComparing(Comparator.comparingInt(Reservation::getNombrePassager).reversed())
                 .thenComparing(Reservation::getDateHeureArrivee)
                 .thenComparingInt(Reservation::getId));
 
@@ -177,8 +178,7 @@ public class Sprint8Service {
                 relecture.getId(),
                 vehicule.getId(),
                 paxAffectes,
-                heureRetour,
-                "RETOUR_IMMEDIAT"
+                heureRetour
             );
 
             aAffecte = true;
@@ -211,5 +211,13 @@ public class Sprint8Service {
             this.reservationsAffectees = reservationsAffectees;
             this.reservationsFractionnees = reservationsFractionnees;
         }
+    }
+
+    private boolean estNonAssigneeIssueeDunSplit(Reservation reservation) {
+        if (reservation == null || reservation.getClient() == null) {
+            return false;
+        }
+        // Couvre les cas: (split), (split)(split), etc.
+        return reservation.getClient().contains("(split)") || reservation.getClient().contains("(reste)");
     }
 }

@@ -131,8 +131,12 @@ public class Sprint7Service {
 
         for (List<Reservation> fenetreBase : fenetres) {
             List<Reservation> groupe = new ArrayList<>();
+            java.util.Set<Integer> idsReporteesFenetre = new java.util.HashSet<>();
             if (!reportees.isEmpty()) {
                 groupe.addAll(reportees);
+                for (Reservation reportee : reportees) {
+                    idsReporteesFenetre.add(reportee.getId());
+                }
             }
             if (fenetreBase != null && !fenetreBase.isEmpty()) {
                 groupe.addAll(fenetreBase);
@@ -150,7 +154,7 @@ public class Sprint7Service {
                 prioritePaxFenetre.put(r.getId(), r.getNombrePassager());
             }
 
-            trierReservationsDecroissant(groupe, prioritePaxFenetre);
+            trierReservationsDecroissant(groupe, prioritePaxFenetre, idsReporteesFenetre);
 
             // Etat de capacite partage dans la meme fenetre TA pour permettre
             // le fractionnement progressif entre reservations du groupe.
@@ -205,7 +209,7 @@ public class Sprint7Service {
                             passagersFractionnes += totalPaxAvant;
                         }
 
-                        trierReservationsDecroissant(groupe, prioritePaxFenetre);
+                        trierReservationsDecroissant(groupe, prioritePaxFenetre, idsReporteesFenetre);
                         continue;
                     }
                 }
@@ -267,7 +271,7 @@ public class Sprint7Service {
                     passagersFractionnes += totalPaxAvant;
                 }
 
-                trierReservationsDecroissant(groupe, prioritePaxFenetre);
+                trierReservationsDecroissant(groupe, prioritePaxFenetre, idsReporteesFenetre);
             }
 
             for (Reservation reservation : groupe) {
@@ -277,7 +281,7 @@ public class Sprint7Service {
             }
 
             // Fenetre suivante: 0 priorite speciale -> tri sur tailles actuelles.
-            trierReservationsDecroissant(nouvellesReportees, new HashMap<>());
+            trierReservationsDecroissant(nouvellesReportees, new HashMap<>(), new java.util.HashSet<>());
             reportees = nouvellesReportees;
         }
 
@@ -383,8 +387,16 @@ public class Sprint7Service {
     }
 
     private void trierReservationsDecroissant(List<Reservation> reservations,
-                                              Map<Integer, Integer> prioritePaxFenetre) {
+                                              Map<Integer, Integer> prioritePaxFenetre,
+                                              java.util.Set<Integer> idsReporteesFenetre) {
         reservations.sort((a, b) -> {
+            boolean aReportee = idsReporteesFenetre != null && idsReporteesFenetre.contains(a.getId());
+            boolean bReportee = idsReporteesFenetre != null && idsReporteesFenetre.contains(b.getId());
+            if (aReportee != bReportee) {
+                // Sprint 8: les non assignes reportes sont prioritaires sur les nouvelles reservations.
+                return aReportee ? -1 : 1;
+            }
+
             int prioriteA = prioritePaxFenetre.getOrDefault(a.getId(), a.getNombrePassager());
             int prioriteB = prioritePaxFenetre.getOrDefault(b.getId(), b.getNombrePassager());
 

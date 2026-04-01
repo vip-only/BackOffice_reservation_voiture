@@ -1,165 +1,73 @@
-### Livrables sprint8
-- Code :
-  - mise a jour PlanificationService / Sprint7Service pour gerer le cas "vehicule qui revient"
-  - priorisation des reservations non assignees quand un vehicule redevient disponible
-  - maintien des regles sprint 5 + sprint 6 + sprint 7
-- SQL scripts (script-sprint8.sql, reset-db-sprint8.sql)
-- Scenarios de test sprint 8 (dont cas "retour vehicule" sur meme jour)
-- Trace/affichage du motif d'assignation (depart immediate vs report)
+# Sprint 8 - Gestion des non assignés et regroupements
 
+## Objectif
+Compléter le sprint 7 en ajoutant la gestion des **réservations non assignées** et les règles de **déclenchement des regroupements**.
 
-sprint8
-vehicule qui revient + non assignees
+## Fonctionnalités (liste)
+- [ ] Gestion des réservations non assignées après un regroupement
+- [ ] Priorité aux non assignés pendant un regroupement, il y a ordre décroissant
+- [ ] S'il reste des places, compléter par la réservation la plus adaptée (nouvelle ou non assignée), avec priorité non assignée en cas d'égalité
+- [ ] Déclenchement d’un regroupement par une voiture disponible
+- [ ] Gestion du cas où une voiture rejoint un regroupement déjà existant
+- [ ] Gestion de l’heure de départ selon la disponibilité et la TA
 
+## Contraintes / Règles métiers
 
----
+### Définition d’une réservation non assignée
+Une réservation non assignée désigne une réservation **complète ou partielle** qui n’a pas eu de voiture :
+- après son regroupement ;
+- ou qui n’a jamais eu de regroupement faute de disponibilité de voiture.
 
-## BackOffice - To Do (Sprint 8)
+Après cela, elle est considérée comme **non assignée** et doit être priorisée au prochain regroupement.
 
-### Objectif
-Ajouter une regle de reaction quand un vehicule termine un trajet et redevient disponible dans la journee.
+Exemple :
+- `resa1` contient 8 personnes et arrive à 8h.
+- Une voiture est disponible à 8h avec 4 places.
+- 4 personnes de `resa1` restent sans véhicule.
+- Elles sont alors considérées comme **non assignées** jusqu’à ce qu’une voiture leur soit attribuée.
 
-Principe metier sprint 8 (version en cours de validation):
-- Si un vehicule est disponible et qu'il existe des reservations non assignees(pas encore attribue),
-- et si la somme des places en attente est >= capacite du vehicule,
-- alors le vehicule repart immediatement avec un nouveau groupe.
-- Sinon, il ne part pas tout de suite et les reservations restent dans le prochain regroupement TA.
-- Dans la prochaine fenetre TA, les reservations non assignees passent en priorite.
-  Si elles sont plusieurs, appliquer le tri decroissant et les regles sprint precedentes entre elles.
-  Ensuite seulement, appliquer les regles normales de la fenetre pour les nouvelles reservations de cette fenetre.
+### Pendant un regroupement
+- Les réservations non assignées sont prioritaires.
+- L’ordre de traitement des non assignés est décroissant.
+- Une fois les non assignés traités, les places restantes reviennent à la réservation qui convient le mieux (logique de proximité de capacité comme sprint7), qu’elle soit nouvelle ou non assignée.
+- En cas d’égalité sur l’adéquation, la réservation non assignée est prioritaire.
+- Après ce remplissage, le reste des réservations suit la logique existante du sprint7 (référence au code).
 
-### Fonctionnalites (liste)
-- [ ] Detecter les evenements "disponible vehicule" (heure de retour calculee+ regarder si c'est l'heure disponibilité vehicule).
-- [ ] Evaluer les reservations non assignees a l'instant du retour.
-- [ ] Regle Sprint 8 : depart immediate si charge en attente >= capacite vehicule disponible.
-- [ ] Sinon : report automatique des reservations dans le regroupement suivant.
-- [ ] Conserver toutes les regles Sprint 5/6/7 (TA, capacite, diesel, nb trajets, fractionnement, nearest-neighbour).
-- [ ] Ajouter des informations de trace pour expliquer chaque decision.
+### Déclenchement d’un regroupement
+- Une voiture disponible déclenche un regroupement, en tenant compte de la TA.
+- Exception : si une voiture redevient disponible pendant un regroupement déjà existant, elle rejoint ce regroupement au lieu d’en créer un nouveau.
+- Tant qu’il reste des réservations non assignées, chaque voiture de retour crée un regroupement.
+- Un regroupement commence aussi dès qu’il y a une nouvelle réservation et un véhicule disponible (sans passagers déjà embarqués) capable de la prendre.
 
-### Contraintes / Regles metiers
+Exemple :
+- Une voiture devient disponible à 8h20.
+- Un regroupement existe déjà à 8h, déclenché par une autre voiture ou par une réservation ultérieure.
+- La voiture de 8h20 s’ajoute au regroupement existant.
 
-#### Ordre des regles (priorite decroissante)
+### Heure de départ
+- L’événement le plus tôt dans la séquence (arrivée, retour, (re)disponibilité, nouvelle reservation avec voiture disponible comme sprint7) fixe l’heure de début du groupement.
+- Une voiture part immédiatement quand elle est remplie par des réservations non assignées.
+- Une voiture part immédiatement quand elle est remplie par des réservations non assignées et par une ou plusieurs nouvelles réservations arrivées à la même heure que le début de sa (re)disponibilité.
+- Dans les autres cas, un regroupement est créé à son arrivée : la TA est prise en compte pour déterminer l’heure de départ.
+- Si une voiture commence un regroupement avec des non assignés mais n’est pas totalement remplie :
+	- s’il n’y a pas de nouvelles réservations dans l’intervalle `[arrivée, arrivée + TA]`, elle repart directement ;
+	- s’il y a des nouvelles réservations dans cet intervalle, on complète la voiture avec ces réservations avant le départ.
 
-**Etape 0 - Base existante (inchangee)**
-- **R0** : Trier les reservations d'une fenetre par passagers DESC puis heure.
-- **R1** : Selection de vehicule selon regles sprint precedents (capacite minimale satisfaisante, nb trajets, carburant).
-- **R2** : Fractionnement autorise si aucun vehicule ne peut absorber toute la reservation.
+## Implémentation technique
+1. Ajouter la gestion des réservations non assignées dans le service d’assignation.
+2. Modifier la logique de regroupement pour prioriser les non assignés.
+3. Gérer le cas où une voiture rejoint un regroupement déjà en cours.
+4. Calculer l’heure de départ à partir de la TA et de l’heure de (re)disponibilité.
+5. Pour l’exécution `POST /sprint8/executer` :
+	- appliquer d’abord la priorité non assignés (ordre décroissant),
+	- puis compléter les places restantes par meilleure adéquation (nouvelle ou non assignée), avec priorité non assignée en cas d’égalité,
+	- puis laisser les réservations restantes suivre la logique existante du code sprint7.
 
-**Etape 1 - Nouveau declencheur Sprint 8 (retour vehicule)**
-- **R8a - Detection retour** : Lorsqu'un vehicule atteint sa `date_heure_retour` ou `heureDisponibilite`, il devient candidat a une nouvelle mission.
-- **R8b - Candidats non assignes** : Constituer la liste des reservations non assignees eligibles a cet instant (meme date de service).
-- **R8c - Condition de depart immediate** :
-  - Si `SUM(passagers_en_attente) >= capacite_vehicule_disponible`,
-  - alors depart immediate a `heure_depart = date_heure_disponible` du vehicule.
-- **R8d - Sinon (pas assez de charge)** :
-  - Ne pas declencher de depart immediate,
-  - conserver ces reservations pour le prochain regroupement TA.
-
-**Etape 2 - Construction du groupe de depart immediate**
-- Le groupe est rempli en priorisant les reservations selon les regles existantes (passagers DESC, heure, etc.).
-- Si la somme depasse la capacite, appliquer la logique de remplissage/fractionnement deja definie.
-- Appliquer nearest-neighbour pour l'ordre de depose du nouveau depart.
-
-**Etape 3 - Cohabitation avec les fenetres TA**
-- Le depart immediate sprint 8 ne supprime pas TA.
-- Il s'insere entre deux fenetres comme un "mini regroupement opportuniste".
-- Les non pris dans ce depart immediate restent pour la fenetre suivante.
-- Regle de priorite a la fenetre suivante :
-  1) traiter d'abord le stock des non assignees,
-  2) en cas de pluralite, tri decroissant + regles sprint 5/6/7,
-  3) puis traiter les reservations nouvelles de la fenetre.
-
-### Resume visuel des regles Sprint 8
-
-```
-A chaque evenement "vehicule revient" ou "vehicule disponible" :
-|
-+- 1) Recuperer reservations non assignees eligibles (meme jour)
-|
-+- 2) Calculer charge_attente = somme passagers
-|
-+- 3) charge_attente >= capacite_vehicule ?
-|      +- OUI  -> depart immediate a heure_retour
-|      |         (selection + ordre selon regles existantes)
-|      +- NON  -> pas de depart immediate
-|                 -> reservations conservees pour prochaine fenetre TA
-|
-+- 4) Continuer le flux normal Sprint 7
-```
-
-### Donnees & schema
-
-- Tables existantes reutilisees :
-  - `reservation`
-  - `vehicule`
-  - `reservation_vehicule`
-  - `distance`
-  - `parametre`
-
-- A verifier si besoin sprint 8 :
-  - [ ] Ajouter un champ `mode_assignation` (`NORMAL_TA`, `RETOUR_IMMEDIAT`) dans `reservation_vehicule`.
-  - [ ] Ou stocker la raison via logs applicatifs si on ne touche pas au schema.
-
-### Implementation technique
-
-1. Detection du retour vehicule
-- Ajouter une methode service qui calcule les vehicules redevenus disponibles a un instant donne.
-- S'appuyer sur `v_historique_assignation.date_heure_retour`.
-
-2. Selection des non assignees eligibles
-- Reutiliser `findWithoutVehiculeByDate(date)` puis filtrer par heure <= heure de retour.
-- Reutiliser la priorite existante (passagers DESC puis heure).
-
-3. Regle de depart immediate
-- Calculer `charge_attente`.
-- Si `charge_attente >= capacite_vehicule`, construire et assigner un groupe immediat.
-- Heure de depart effective du groupe immediate = `heure_retour_vehicule`.
-
-4. Integrer sans casser Sprint 7
-- Lancer la logique sprint 8 dans la boucle principale d'assignation.
-- Conserver la synchronisation `reservation` <-> `reservation_vehicule`.
-- Eviter les doubles assignations dans la meme minute (verrou fonctionnel ou verification pre-insert).
-
-5. Traces / observabilite
-- Logger pour chaque tentative :
-  - vehicule, heure retour, charge attente, capacite,
-  - decision (`DEPART_IMMEDIAT` ou `REPORT_TA`).
-
-### Tests & criteres d'acceptation
-
-| Test | Scenario | Resultat attendu |
+## Tests & critères d’acceptation
+| Test | Scénario | Résultat attendu |
 |------|----------|------------------|
-| T1 | Vehicule 2 revient a 14:00, non assignees total = 9, capacite vehicule = 8 | Depart immediate a 14:00 |
-| T2 | Vehicule 2 revient a 14:00, non assignees total = 5, capacite = 8 | Pas de depart immediate, report TA |
-| T3 | Deux vehicules reviennent proches (14:00, 14:05) | Pas de double affectation de la meme reservation |
-| T4 | Cas avec fractionnement necessaire lors d'un depart immediate | Fractionnement applique, aucune perte passagers |
-| T5 | Cas mixte: depart immediate puis fenetre TA suivante | Regles sprint 8 puis sprint 7 respectees |
-| T6 | Reservations non assignees de la veille | Non prises dans un depart immediate du jour (si regle "meme jour" validee) |
-| T7 | Egalite capacite / egalite trajets / diesel | Priorites sprint 6-7 conservees |
-
-### Scripts SQL
-- [ ] `db/reset-db-sprint8.sql` : reset complet + donnees de base.
-- [ ] `db/script-sprint8.sql` : cas de test sprint 8.
-- [ ] Donnees de test minimales :
-  - vehicule qui revient a 14:00,
-  - reservations non assignees avant 14:00,
-  - un cas charge >= capacite,
-  - un cas charge < capacite.
-
-### Taches techniques detaillees
-- [ ] Service : introduire une methode `traiterRetoursVehicules(...)`.
-- [ ] DAO : methode de lecture des retours par fenetre de temps.
-- [ ] DAO : methode pour charger les non assignees eligibles a l'heure H.
-- [ ] Service : fonction de calcul `charge_attente`.
-- [ ] Service : strategie de selection des reservations pour remplir un vehicule revenu.
-- [ ] Service : insertion des traces de decision.
-- [ ] Controller : option pour executer sprint 8 sur une date.
-- [ ] JSP sprint7/sprint8 : afficher motif d'assignation.
-- [ ] SQL : scenarios de verification automatique.
-
-### Open questions (a valider metier)
-1. La condition sprint 8 est-elle bien `charge_attente >= capacite_vehicule` (et non > 0) ?
-2. Les reservations eligibles sont-elles limitees a la meme fenetre TA ou a tout le backlog du jour ?
-3. En cas de charge partielle, peut-on partir quand meme pour minimiser le retard ?
-4. Regle officielle pour "sinon il entre dans le prochain regroupement" (confirmer formulation finale).
-5. Doit-on exposer cette regle via un parametre (`ACTIVER_RETOUR_IMMEDIAT`) ?
+| T1 | 8 pax, voiture 4 places disponible | 4 pax assignés, 4 pax non assignés |
+| T2 | Non assignés présents lors d’un regroupement | Les non assignés sont traités en priorité |
+| T3 | Voiture redevenant disponible pendant un regroupement existant | Elle rejoint le regroupement déjà ouvert |
+| T4 | Voiture remplie uniquement par non assignés | Départ immédiat |
+| T5 | Voiture remplie par non assignés + nouvelles réservations à la même heure | Départ immédiat |
