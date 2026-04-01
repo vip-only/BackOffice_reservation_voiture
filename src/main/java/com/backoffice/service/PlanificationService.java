@@ -22,7 +22,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.HashSet;
+import java.util.Comparator;
 
 public class PlanificationService {
     
@@ -160,19 +160,19 @@ public class PlanificationService {
             }
 
             List<Reservation> groupe = new ArrayList<>();
-            if (!reportees.isEmpty()) {
-                groupe.addAll(reportees);
-            }
-            groupe.addAll(fenetre);
+            Comparator<Reservation> prioriteInterne = Comparator
+                .comparingInt(Reservation::getNombrePassager).reversed()
+                .thenComparing(Reservation::getDateHeureArrivee)
+                .thenComparingInt(Reservation::getId);
 
-            // Trier chaque groupe par nombre de passagers DESC puis heure d'arrivee
-            groupe.sort((r1, r2) -> {
-                int c = Integer.compare(r2.getNombrePassager(), r1.getNombrePassager());
-                if (c != 0) {
-                    return c;
-                }
-                return r1.getDateHeureArrivee().compareTo(r2.getDateHeureArrivee());
-            });
+            // Sprint 8: priorite stricte au stock reporte, puis nouvelles reservations.
+            List<Reservation> reporteesTriees = new ArrayList<>(reportees);
+            reporteesTriees.sort(prioriteInterne);
+            groupe.addAll(reporteesTriees);
+
+            List<Reservation> nouvellesTriees = new ArrayList<>(fenetre);
+            nouvellesTriees.sort(prioriteInterne);
+            groupe.addAll(nouvellesTriees);
             
             // Heure de départ = MAX(date_heure_arrivee) du groupe
             Timestamp heureDepart = calculerHeureDepart(groupe);
