@@ -36,9 +36,10 @@ public class Sprint8Controller {
             }
 
             chargerDonneesPage(mv, date);
-        } catch (Exception e) {
-            mv.addData("error", "Erreur lors du chargement Sprint 8 : " + e.getMessage());
-            e.printStackTrace();
+        } catch (Throwable e) {
+            Throwable cause = (e.getCause() != null) ? e.getCause() : e;
+            mv.addData("error", "Erreur lors du chargement Sprint 8 : " + cause.getClass().getSimpleName() + " - " + cause.getMessage());
+            cause.printStackTrace();
         }
 
         return mv;
@@ -65,9 +66,10 @@ public class Sprint8Controller {
             chargerDonneesPage(mv, date);
             mv.addData("resultatSprint8", resultat);
             mv.addData("success", "Sprint 8 execute avec succes.");
-        } catch (Exception e) {
-            mv.addData("error", "Erreur lors de l'execution Sprint 8 : " + e.getMessage());
-            e.printStackTrace();
+        } catch (Throwable e) {
+            Throwable cause = (e.getCause() != null) ? e.getCause() : e;
+            mv.addData("error", "Erreur lors de l'execution Sprint 8 : " + cause.getClass().getSimpleName() + " - " + cause.getMessage());
+            cause.printStackTrace();
         }
 
         return mv;

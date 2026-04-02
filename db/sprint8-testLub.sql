@@ -110,7 +110,7 @@ INSERT INTO distance (from_id, to_id, kilometer) VALUES
 -- Vehicules (tries par capacite et type carburant)
 INSERT INTO vehicule (reference, nombre_place, type_carburant, heure_disponibilite) VALUES
     ('vehicule1', 4,  'D', '00:00:00'),
-    ('vehicule2', 8,  'ES', '09:36:00');
+    ('vehicule2', 4,  'ES', '00:00:00');
 
 
 -- =========================================
@@ -146,9 +146,9 @@ INSERT INTO reservation (client, nombre_passager, date_heure_arrivee, id_hotel) 
     ('Client1', 14, '2026-03-19 08:00:00', 1);
 
 INSERT INTO reservation (client, nombre_passager, date_heure_arrivee, id_hotel) VALUES
-    ('Client2', 12, '2026-03-19 08:05:00', 1);
+    ('Client2', 12, '2026-03-19 10:05:00', 1);
 
 INSERT INTO reservation (client, nombre_passager, date_heure_arrivee, id_hotel) VALUES
-    ('Client3', 2, '2026-03-19 12:10:00', 1);
+    ('Client3', 2, '2026-03-19 14:10:00', 1);
 
 

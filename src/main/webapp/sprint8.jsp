@@ -652,10 +652,27 @@ div[style*="border: 1px solid #e0e0e0"] {
                             }
                         }
 
-                        Timestamp depAff = (Timestamp) depParReservation.get(r.getId());
-                        Timestamp retAff = (Timestamp) retParReservation.get(r.getId());
-                        if (depAff == null) depAff = p.getHeureDepart();
-                        if (retAff == null) retAff = p.getHeureRetour();
+                        // Regle demandee: "Heure vol" du bloc regroupements (r.date_heure_arrivee)
+                        // doit correspondre a "Date/Heure depart" dans ce tableau.
+                        Timestamp depAff = r.getDateHeureArrivee();
+                        if (depAff == null) {
+                            depAff = (Timestamp) depParReservation.get(r.getId());
+                        }
+                        if (depAff == null) {
+                            depAff = p.getHeureDepart();
+                        }
+
+                        // Calcul robuste de retour: heure_depart_affichee + duree_totale.
+                        Timestamp retAff = null;
+                        if (depAff != null) {
+                            retAff = new Timestamp(depAff.getTime() + (long) p.getDureeTotaleMinutes() * 60L * 1000L);
+                        }
+                        if (retAff == null) {
+                            retAff = (Timestamp) retParReservation.get(r.getId());
+                        }
+                        if (retAff == null) {
+                            retAff = p.getHeureRetour();
+                        }
             %>
                 <tr>
                     <td><%= r.getClient() %></td>
