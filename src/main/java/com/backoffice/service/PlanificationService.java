@@ -586,7 +586,8 @@ public class PlanificationService {
         
         for (Reservation r : ordreDepose) {
             String key = positionActuelle + "-" + r.getIdHotel();
-            double distanceKm = allDistances.getOrDefault(key, 0.0);
+            String reverseKey = r.getIdHotel() + "-" + positionActuelle;
+            double distanceKm = allDistances.getOrDefault(key, allDistances.getOrDefault(reverseKey, 0.0));
             int dureeMinutes = (int) Math.round((distanceKm / vitesseMoyenne) * 60);
             
             heureActuelle = new Timestamp(heureActuelle.getTime() + dureeMinutes * 60L * 1000L);
@@ -604,7 +605,9 @@ public class PlanificationService {
         
         // Étape retour vers TNR
         // Pour le retour, utiliser la distance TNR->dernier hotel (symétrique)
-        double distanceRetour = allDistances.getOrDefault("TNR-" + positionActuelle, 0.0);
+        String keyRetour = "TNR-" + positionActuelle;
+        String keyRetourInverse = positionActuelle + "-TNR";
+        double distanceRetour = allDistances.getOrDefault(keyRetour, allDistances.getOrDefault(keyRetourInverse, 0.0));
         int dureeRetour = (int) Math.round((distanceRetour / vitesseMoyenne) * 60);
         heureActuelle = new Timestamp(heureActuelle.getTime() + dureeRetour * 60L * 1000L);
         distanceTotale += distanceRetour;

@@ -618,6 +618,8 @@ div[style*="border: 1px solid #e0e0e0"] {
 
                 java.util.Map depParReservation = new java.util.HashMap();
                 java.util.Map retParReservation = new java.util.HashMap();
+                java.util.Map distParReservation = new java.util.HashMap();
+                java.util.Map dureeParReservation = new java.util.HashMap();
 
                 if (groupesVehiculesTbl != null) {
                     for (int gti = 0; gti < groupesVehiculesTbl.size(); gti++) {
@@ -631,6 +633,8 @@ div[style*="border: 1px solid #e0e0e0"] {
                                 Reservation rr = (Reservation) resG.get(rgi);
                                 depParReservation.put(rr.getId(), depG);
                                 retParReservation.put(rr.getId(), retG);
+                                distParReservation.put(rr.getId(), gvTbl.getDistanceTotaleKm());
+                                dureeParReservation.put(rr.getId(), gvTbl.getDureeTotaleMinutes());
                             }
                         }
                     }
@@ -662,10 +666,15 @@ div[style*="border: 1px solid #e0e0e0"] {
                             depAff = p.getHeureDepart();
                         }
 
-                        // Calcul robuste de retour: heure_depart_affichee + duree_totale.
+                        Integer dureeAff = (Integer) dureeParReservation.get(r.getId());
+                        if (dureeAff == null) {
+                            dureeAff = p.getDureeTotaleMinutes();
+                        }
+
+                        // Calcul robuste de retour: heure_depart_affichee + duree du trajet du groupe.
                         Timestamp retAff = null;
                         if (depAff != null) {
-                            retAff = new Timestamp(depAff.getTime() + (long) p.getDureeTotaleMinutes() * 60L * 1000L);
+                            retAff = new Timestamp(depAff.getTime() + (long) dureeAff * 60L * 1000L);
                         }
                         if (retAff == null) {
                             retAff = (Timestamp) retParReservation.get(r.getId());
@@ -673,17 +682,22 @@ div[style*="border: 1px solid #e0e0e0"] {
                         if (retAff == null) {
                             retAff = p.getHeureRetour();
                         }
+
+                        Double distAff = (Double) distParReservation.get(r.getId());
+                        if (distAff == null) {
+                            distAff = p.getDistanceKm();
+                        }
             %>
                 <tr>
                     <td><%= r.getClient() %></td>
                     <td><%= r.getNombrePassager() %></td>
                     <td><%= r.getNomHotel() %></td>
-                    <td><%= String.format("%.1f", p.getDistanceKm()) %> km</td>
+                    <td><%= String.format("%.1f", distAff) %> km</td>
                     <td><%= r.getReferenceVehicule() %></td>
                     <td><span class="badge <%= bc %>"><%= tl %></span></td>
                     <td class="time-display"><%= depAff != null ? dtFormat.format(depAff) : "-" %></td>
                     <td class="time-display"><%= retAff != null ? dtFormat.format(retAff) : "-" %></td>
-                    <td><%= p.getDureeTotaleMinutes() %> min</td>
+                    <td><%= dureeAff %> min</td>
                 </tr>
             <%      }
                 } else {
