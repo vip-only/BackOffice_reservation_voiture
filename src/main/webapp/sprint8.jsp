@@ -706,9 +706,9 @@ div[style*="border: 1px solid #e0e0e0"] {
                             dureeAff = p.getDureeTotaleMinutes();
                         }
 
-                        // Date/Heure retour priorisee sur la redisponibilite calculee (backend).
-                        Timestamp retAff = (Timestamp) retourRedispoParReservation.get(r.getId());
-                        if (retAff == null && depAff != null) {
+                        // Regle demandee: Date/Heure retour = Date/Heure depart + Duree totale.
+                        Timestamp retAff = null;
+                        if (depAff != null) {
                             retAff = new Timestamp(depAff.getTime() + (long) dureeAff * 60L * 1000L);
                         }
                         if (retAff == null) {

@@ -183,16 +183,13 @@ public class Sprint8Service {
 
                 List<Vehicule> vehiculesRestants = new ArrayList<>(vehiculesMemeInstant);
                 while (!vehiculesRestants.isEmpty()) {
-                    List<Reservation> backlog = reservationDAO.findWithoutVehiculeByDateAndBeforeTime(date, debutFenetreVehicule);
+                    List<Reservation> backlog = chargerBacklogPrioritaire(date, debutFenetreVehicule, taMinutes);
                     if (backlog.isEmpty()) {
                         decisionsReportTa += vehiculesRestants.size();
                         break;
                     }
 
-                    backlog.sort(Comparator
-                        .comparingInt(Reservation::getNombrePassager).reversed()
-                        .thenComparing(Reservation::getDateHeureArrivee)
-                        .thenComparingInt(Reservation::getId));
+                    trierBacklogPrioritaire(backlog);
 
                     Vehicule vehiculeChoisi = choisirVehiculeProcheDuPlusGrandNonAssigne(vehiculesRestants, backlog);
                     if (vehiculeChoisi == null) {
@@ -242,15 +239,12 @@ public class Sprint8Service {
 
                 List<Vehicule> vehiculesRestants = new ArrayList<>(vehiculesDisponibles);
                 while (!vehiculesRestants.isEmpty()) {
-                    List<Reservation> backlog = reservationDAO.findWithoutVehiculeByDateAndBeforeTime(date, debutGroupementActif);
+                    List<Reservation> backlog = chargerBacklogPrioritaire(date, debutGroupementActif, taMinutes);
                     if (backlog.isEmpty()) {
                         break;
                     }
 
-                    backlog.sort(Comparator
-                        .comparingInt(Reservation::getNombrePassager).reversed()
-                        .thenComparing(Reservation::getDateHeureArrivee)
-                        .thenComparingInt(Reservation::getId));
+                    trierBacklogPrioritaire(backlog);
 
                     Vehicule vehiculeChoisi = choisirVehiculeProcheDuPlusGrandNonAssigne(vehiculesRestants, backlog);
                     if (vehiculeChoisi == null) {
@@ -348,6 +342,71 @@ public class Sprint8Service {
         });
 
         return vehicules.get(0);
+    }
+
+    private List<Reservation> chargerBacklogPrioritaire(Date date,
+                                                        Timestamp instant,
+                                                        int taMinutes) throws SQLException {
+        List<Reservation> backlog = reservationDAO.findWithoutVehiculeByDateAndBeforeTime(date, instant);
+        Timestamp finFenetre = ajouterMinutes(instant, taMinutes);
+
+        for (Reservation r : reservationDAO.findWithoutVehiculeByDate(date)) {
+            if (r == null || r.getIdVehicule() != null) {
+                continue;
+            }
+
+            if (!estSplitPrioritaire(r)) {
+                continue;
+            }
+
+            boolean dejaDansBacklog = false;
+            for (Reservation b : backlog) {
+                if (b.getId() == r.getId()) {
+                    dejaDansBacklog = true;
+                    break;
+                }
+            }
+            if (dejaDansBacklog) {
+                continue;
+            }
+
+            // Un reliquat (split) reste prioritaire meme dans le regroupement courant,
+            // y compris lorsqu'il tombe dans la fenetre TA du regroupement.
+            if (r.getDateHeureArrivee() == null || !r.getDateHeureArrivee().after(finFenetre)) {
+                backlog.add(r);
+            }
+        }
+
+        return backlog;
+    }
+
+    private void trierBacklogPrioritaire(List<Reservation> backlog) {
+        backlog.sort((a, b) -> {
+            boolean splitA = estSplitPrioritaire(a);
+            boolean splitB = estSplitPrioritaire(b);
+            if (splitA != splitB) {
+                return splitA ? -1 : 1;
+            }
+
+            int cmpPax = Integer.compare(b.getNombrePassager(), a.getNombrePassager());
+            if (cmpPax != 0) {
+                return cmpPax;
+            }
+
+            int cmpTs = a.getDateHeureArrivee().compareTo(b.getDateHeureArrivee());
+            if (cmpTs != 0) {
+                return cmpTs;
+            }
+
+            return Integer.compare(a.getId(), b.getId());
+        });
+    }
+
+    private boolean estSplitPrioritaire(Reservation reservation) {
+        if (reservation == null || reservation.getClient() == null) {
+            return false;
+        }
+        return reservation.getClient().contains("(split)");
     }
 
     private Reservation choisirReservationOptimalePourCompleter(List<Reservation> reservations,
