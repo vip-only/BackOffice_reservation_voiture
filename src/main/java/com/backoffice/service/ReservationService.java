@@ -70,12 +70,21 @@ public class ReservationService {
             "    CROSS JOIN (SELECT valeur FROM parametre WHERE cle = 'VITESSE_MOYENNE') p " +
             "    WHERE d.from_id = 'TNR' AND d.to_id = CAST(? AS VARCHAR) " +
             "), " +
+            "trajets_vehicule AS ( " +
+            "    SELECT rv.vehicule_id, rv.date_assignation AS date_heure_depart, " +
+            "           MAX(rv.date_assignation + (ROUND((d.kilometer / p.valeur) * 60 * 2, 0)::INTEGER * INTERVAL '1 minute')) AS date_heure_retour " +
+            "    FROM reservation_vehicule rv " +
+            "    JOIN reservation r ON r.id = rv.reservation_id " +
+            "    JOIN distance d ON d.from_id = 'TNR' AND d.to_id = CAST(r.id_hotel AS VARCHAR) " +
+            "    CROSS JOIN (SELECT valeur FROM parametre WHERE cle = 'VITESSE_MOYENNE') p " +
+            "    GROUP BY rv.vehicule_id, rv.date_assignation " +
+            "), " +
             "vehicules_occupes AS ( " +
-            "    SELECT DISTINCT ha.vehicule_id " +
-            "    FROM v_historique_assignation ha " +
+            "    SELECT DISTINCT tv.vehicule_id " +
+            "    FROM trajets_vehicule tv " +
             "    CROSS JOIN nouvelle_reservation nr " +
-            "    WHERE ha.date_heure_arrivee < nr.date_heure_retour " +
-            "    AND ha.date_heure_retour > nr.date_heure_arrivee " +
+            "    WHERE tv.date_heure_depart < nr.date_heure_retour " +
+            "    AND tv.date_heure_retour > nr.date_heure_arrivee " +
             ") " +
             "SELECT v.id, v.reference, v.nombre_place, v.type_carburant, v.heure_disponibilite " +
             "FROM vehicule v " +
@@ -119,16 +128,25 @@ public class ReservationService {
             "    FROM distance d " +
             "    CROSS JOIN (SELECT valeur FROM parametre WHERE cle = 'VITESSE_MOYENNE') p " +
             "    WHERE d.from_id = 'TNR' AND d.to_id = CAST(? AS VARCHAR) " +
+            "), " +
+            "trajets_vehicule AS ( " +
+            "    SELECT rv.vehicule_id, rv.date_assignation AS date_heure_depart, " +
+            "           MAX(rv.date_assignation + (ROUND((d.kilometer / p.valeur) * 60 * 2, 0)::INTEGER * INTERVAL '1 minute')) AS date_heure_retour " +
+            "    FROM reservation_vehicule rv " +
+            "    JOIN reservation r ON r.id = rv.reservation_id " +
+            "    JOIN distance d ON d.from_id = 'TNR' AND d.to_id = CAST(r.id_hotel AS VARCHAR) " +
+            "    CROSS JOIN (SELECT valeur FROM parametre WHERE cle = 'VITESSE_MOYENNE') p " +
+            "    GROUP BY rv.vehicule_id, rv.date_assignation " +
             ") " +
             "SELECT CASE " +
             "    WHEN ?::time < COALESCE(v.heure_disponibilite, TIME '00:00:00') THEN 1 " +
             "    ELSE ( " +
             "        SELECT COUNT(*) " +
-            "        FROM v_historique_assignation ha " +
+            "        FROM trajets_vehicule tv " +
             "        CROSS JOIN nouvelle_reservation nr " +
-            "        WHERE ha.vehicule_id = v.id " +
-            "        AND ha.date_heure_arrivee < nr.date_heure_retour " +
-            "        AND ha.date_heure_retour > nr.date_heure_arrivee " +
+            "        WHERE tv.vehicule_id = v.id " +
+            "        AND tv.date_heure_depart < nr.date_heure_retour " +
+            "        AND tv.date_heure_retour > nr.date_heure_arrivee " +
             "    ) " +
             "END AS nb_conflits " +
             "FROM vehicule v " +
@@ -184,11 +202,20 @@ public class ReservationService {
      */
     public Timestamp getProchaineDisponibiliteVehiculeCapable(int nbPassagers, Timestamp afterTime) throws SQLException {
         String sql =
-            "SELECT MIN(ha.date_heure_retour) AS prochaine_disponibilite " +
-            "FROM v_historique_assignation ha " +
-            "JOIN vehicule v ON ha.vehicule_id = v.id " +
+            "WITH trajets_vehicule AS ( " +
+            "    SELECT rv.vehicule_id, rv.date_assignation AS date_heure_depart, " +
+            "           MAX(rv.date_assignation + (ROUND((d.kilometer / p.valeur) * 60 * 2, 0)::INTEGER * INTERVAL '1 minute')) AS date_heure_retour " +
+            "    FROM reservation_vehicule rv " +
+            "    JOIN reservation r ON r.id = rv.reservation_id " +
+            "    JOIN distance d ON d.from_id = 'TNR' AND d.to_id = CAST(r.id_hotel AS VARCHAR) " +
+            "    CROSS JOIN (SELECT valeur FROM parametre WHERE cle = 'VITESSE_MOYENNE') p " +
+            "    GROUP BY rv.vehicule_id, rv.date_assignation " +
+            ") " +
+            "SELECT MIN(tv.date_heure_retour) AS prochaine_disponibilite " +
+            "FROM trajets_vehicule tv " +
+            "JOIN vehicule v ON tv.vehicule_id = v.id " +
             "WHERE v.nombre_place >= ? " +
-            "AND ha.date_heure_retour > ?";
+            "AND tv.date_heure_retour > ?";
 
         try (Connection conn = DBConnection.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {

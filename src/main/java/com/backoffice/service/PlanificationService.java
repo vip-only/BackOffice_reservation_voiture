@@ -882,6 +882,18 @@ private Map<String, Double> getAllDistances(List<Reservation> reservations) thro
             }
         }
 
+        // Hotel -> TNR (utile pour le fallback symetrique TNR -> Hotel)
+        String sql3 = "SELECT from_id, to_id, kilometer FROM distance WHERE from_id = ANY(?) AND to_id = 'TNR'";
+        try (PreparedStatement ps3 = conn.prepareStatement(sql3)) {
+            ps3.setArray(1, conn.createArrayOf("VARCHAR", ids));
+            try (ResultSet rs = ps3.executeQuery()) {
+                while (rs.next()) {
+                    String key = rs.getString("from_id") + "-" + rs.getString("to_id");
+                    distances.put(key, rs.getDouble("kilometer"));
+                }
+            }
+        }
+
         // Ajouter explicitement les distances identite hotel->hotel = 0
         for (String id : ids) {
             distances.put(id + "-" + id, 0.0);

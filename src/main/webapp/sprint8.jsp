@@ -620,6 +620,28 @@ div[style*="border: 1px solid #e0e0e0"] {
                 java.util.Map retParReservation = new java.util.HashMap();
                 java.util.Map distParReservation = new java.util.HashMap();
                 java.util.Map dureeParReservation = new java.util.HashMap();
+                java.util.Map depAssignationParReservation = new java.util.HashMap();
+                java.util.Map modeAssignationParReservation = new java.util.HashMap();
+                java.util.Map retourRedispoParReservation = new java.util.HashMap();
+
+                List rvRowsForPlanif = (List) request.getAttribute("reservationVehiculeRows");
+                if (rvRowsForPlanif != null) {
+                    for (int rvi = 0; rvi < rvRowsForPlanif.size(); rvi++) {
+                        Map rowRv = (Map) rvRowsForPlanif.get(rvi);
+                        Object resIdObj = rowRv.get("reservationId");
+                        Object depObj = rowRv.get("dateAssignation");
+                        if (resIdObj != null && depObj instanceof Timestamp) {
+                            depAssignationParReservation.put(resIdObj, (Timestamp) depObj);
+                        }
+                        if (resIdObj != null && rowRv.get("modeAssignation") != null) {
+                            modeAssignationParReservation.put(resIdObj, String.valueOf(rowRv.get("modeAssignation")));
+                        }
+                        Object retObj = rowRv.get("dateHeureRedisponibilite");
+                        if (resIdObj != null && retObj instanceof Timestamp) {
+                            retourRedispoParReservation.put(resIdObj, (Timestamp) retObj);
+                        }
+                    }
+                }
 
                 if (groupesVehiculesTbl != null) {
                     for (int gti = 0; gti < groupesVehiculesTbl.size(); gti++) {
@@ -656,14 +678,27 @@ div[style*="border: 1px solid #e0e0e0"] {
                             }
                         }
 
-                        // Regle demandee: "Heure vol" du bloc regroupements (r.date_heure_arrivee)
-                        // doit correspondre a "Date/Heure depart" dans ce tableau.
-                        Timestamp depAff = r.getDateHeureArrivee();
-                        if (depAff == null) {
+                        // Date/Heure depart selon mode:
+                        // - NORMAL_TA: depart groupe (regroupement + TA)
+                        // - RETOUR_IMMEDIAT: depart immediat (date_assignation)
+                        // + fallback robuste.
+                        String modeAff = (String) modeAssignationParReservation.get(r.getId());
+                        Timestamp depAff;
+                        if ("NORMAL_TA".equals(modeAff)) {
                             depAff = (Timestamp) depParReservation.get(r.getId());
-                        }
-                        if (depAff == null) {
-                            depAff = p.getHeureDepart();
+                            if (depAff == null) depAff = p.getHeureDepart();
+                            if (depAff == null) depAff = (Timestamp) depAssignationParReservation.get(r.getId());
+                            if (depAff == null) depAff = r.getDateHeureArrivee();
+                        } else if ("RETOUR_IMMEDIAT".equals(modeAff)) {
+                            depAff = (Timestamp) depAssignationParReservation.get(r.getId());
+                            if (depAff == null) depAff = (Timestamp) depParReservation.get(r.getId());
+                            if (depAff == null) depAff = p.getHeureDepart();
+                            if (depAff == null) depAff = r.getDateHeureArrivee();
+                        } else {
+                            depAff = (Timestamp) depParReservation.get(r.getId());
+                            if (depAff == null) depAff = p.getHeureDepart();
+                            if (depAff == null) depAff = (Timestamp) depAssignationParReservation.get(r.getId());
+                            if (depAff == null) depAff = r.getDateHeureArrivee();
                         }
 
                         Integer dureeAff = (Integer) dureeParReservation.get(r.getId());
@@ -671,9 +706,9 @@ div[style*="border: 1px solid #e0e0e0"] {
                             dureeAff = p.getDureeTotaleMinutes();
                         }
 
-                        // Calcul robuste de retour: heure_depart_affichee + duree du trajet du groupe.
-                        Timestamp retAff = null;
-                        if (depAff != null) {
+                        // Date/Heure retour priorisee sur la redisponibilite calculee (backend).
+                        Timestamp retAff = (Timestamp) retourRedispoParReservation.get(r.getId());
+                        if (retAff == null && depAff != null) {
                             retAff = new Timestamp(depAff.getTime() + (long) dureeAff * 60L * 1000L);
                         }
                         if (retAff == null) {

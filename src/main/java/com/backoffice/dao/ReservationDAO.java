@@ -447,12 +447,23 @@ public class ReservationDAO {
     public List<Map<String, Object>> getReservationVehiculeByDate(java.sql.Date date) throws SQLException {
         List<Map<String, Object>> rows = new ArrayList<>();
         String sql =
+            "WITH trajets_vehicule AS ( " +
+            "    SELECT rv2.vehicule_id, rv2.date_assignation, " +
+            "           MAX(rv2.date_assignation + (ROUND((d.kilometer / p.valeur) * 60 * 2, 0)::INTEGER * INTERVAL '1 minute')) AS date_heure_redisponibilite " +
+            "    FROM reservation_vehicule rv2 " +
+            "    JOIN reservation r2 ON r2.id = rv2.reservation_id " +
+            "    JOIN distance d ON d.from_id = 'TNR' AND d.to_id = CAST(r2.id_hotel AS VARCHAR) " +
+            "    CROSS JOIN (SELECT valeur FROM parametre WHERE cle = 'VITESSE_MOYENNE') p " +
+            "    GROUP BY rv2.vehicule_id, rv2.date_assignation " +
+            ") " +
             "SELECT rv.reservation_id, rv.vehicule_id, rv.nb_passagers, rv.date_assignation, rv.mode_assignation, " +
+            "       tv.date_heure_redisponibilite, " +
             "       r.client, r.date_heure_arrivee, h.nom AS nom_hotel, v.reference AS reference_vehicule " +
             "FROM reservation_vehicule rv " +
             "JOIN reservation r ON r.id = rv.reservation_id " +
             "JOIN vehicule v ON v.id = rv.vehicule_id " +
             "JOIN hotel h ON h.id_hotel = r.id_hotel " +
+            "LEFT JOIN trajets_vehicule tv ON tv.vehicule_id = rv.vehicule_id AND tv.date_assignation = rv.date_assignation " +
             "WHERE DATE(r.date_heure_arrivee) = ? " +
             "ORDER BY rv.date_assignation, rv.reservation_id";
 
@@ -468,6 +479,7 @@ public class ReservationDAO {
                     row.put("nbPassagers", rs.getInt("nb_passagers"));
                     row.put("dateAssignation", rs.getTimestamp("date_assignation"));
                     row.put("modeAssignation", rs.getString("mode_assignation"));
+                    row.put("dateHeureRedisponibilite", rs.getTimestamp("date_heure_redisponibilite"));
                     row.put("client", rs.getString("client"));
                     row.put("dateHeureArrivee", rs.getTimestamp("date_heure_arrivee"));
                     row.put("nomHotel", rs.getString("nom_hotel"));
@@ -618,11 +630,19 @@ public class ReservationDAO {
     public List<Map<String, Object>> getVehiculeRetourEventsByDate(java.sql.Date date) throws SQLException {
         List<Map<String, Object>> events = new ArrayList<>();
         String sql =
-            "SELECT ha.vehicule_id, MIN(ha.date_heure_retour) AS date_heure_retour " +
-            "FROM v_historique_assignation ha " +
-            "WHERE DATE(ha.date_heure_arrivee) = ? " +
-            "GROUP BY ha.vehicule_id, ha.date_heure_retour " +
-            "ORDER BY date_heure_retour, ha.vehicule_id";
+            "WITH trajets_vehicule AS ( " +
+            "    SELECT rv.vehicule_id, rv.date_assignation AS date_heure_depart, " +
+            "           MAX(rv.date_assignation + (ROUND((d.kilometer / p.valeur) * 60 * 2, 0)::INTEGER * INTERVAL '1 minute')) AS date_heure_retour " +
+            "    FROM reservation_vehicule rv " +
+            "    JOIN reservation r ON r.id = rv.reservation_id " +
+            "    JOIN distance d ON d.from_id = 'TNR' AND d.to_id = CAST(r.id_hotel AS VARCHAR) " +
+            "    CROSS JOIN (SELECT valeur FROM parametre WHERE cle = 'VITESSE_MOYENNE') p " +
+            "    WHERE DATE(rv.date_assignation) = ? " +
+            "    GROUP BY rv.vehicule_id, rv.date_assignation " +
+            ") " +
+            "SELECT vehicule_id, date_heure_retour " +
+            "FROM trajets_vehicule " +
+            "ORDER BY date_heure_retour, vehicule_id";
 
         try (Connection conn = DBConnection.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
