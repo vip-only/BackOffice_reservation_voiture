@@ -158,18 +158,19 @@ JOIN distance d ON d.from_id = 'TNR' AND d.to_id = CAST(r.id_hotel AS VARCHAR)
 CROSS JOIN (SELECT valeur FROM parametre WHERE cle = 'VITESSE_MOYENNE') p
 WHERE r.id_vehicule IS NOT NULL;
 
--- 5) Seeds Sprint 8: trajets deja assignes pour creer des evenements de retour
--- Ces retours sont visibles AVANT l'execution Sprint 7 et permettent de tester
--- DEPART_IMMEDIAT / REPORT_TA sur le backlog Sprint 7.
+-- 5) Seeds Sprint 8: reservations deja assignees pour creer des retours
+-- Sans ces seeds, aucun vehicule ne "revient" avant le lancement, donc Sprint 8 ne declenche rien.
+-- Seed A: VH-001 revient vers 08:00 (test report possible si charge < 4)
 INSERT INTO reservation (client, nombre_passager, date_heure_arrivee, id_hotel, id_vehicule)
-SELECT 'SEED-REPORT-0900', 1, TIMESTAMP '2026-03-11 07:00:00', h.id_hotel, v.id
-FROM hotel h, vehicule v
-WHERE h.nom = 'Lokanga' AND v.reference = 'VH-006';
-
-INSERT INTO reservation (client, nombre_passager, date_heure_arrivee, id_hotel, id_vehicule)
-SELECT 'SEED-IMMEDIAT-1000', 1, TIMESTAMP '2026-03-11 09:00:00', h.id_hotel, v.id
+SELECT 'SEED-RET-VH001', 1, TIMESTAMP '2026-03-11 07:00:00', h.id_hotel, v.id
 FROM hotel h, vehicule v
 WHERE h.nom = 'Colbert' AND v.reference = 'VH-001';
+
+-- Seed B: VH-005 revient vers 12:32 (test depart immediate possible si charge >= 12)
+INSERT INTO reservation (client, nombre_passager, date_heure_arrivee, id_hotel, id_vehicule)
+SELECT 'SEED-RET-VH005', 1, TIMESTAMP '2026-03-11 10:30:00', h.id_hotel, v.id
+FROM hotel h, vehicule v
+WHERE h.nom = 'Lokanga' AND v.reference = 'VH-005';
 
 -- 6) Donnees Sprint 7 (reservations non assignees)
 -- Lancer ensuite POST /sprint8/executer?date=2026-03-11
@@ -194,6 +195,8 @@ INSERT INTO reservation (client, nombre_passager, date_heure_arrivee, id_hotel, 
 SELECT 'SPRINT 8 TABLES + SPRINT 7 DATA READY' AS status;
 SELECT COUNT(*) AS nb_reservations_total FROM reservation;
 SELECT COUNT(*) AS nb_non_assignees FROM reservation WHERE id_vehicule IS NULL;
+
+-- Controle: les retours Sprint 8 doivent exister AVANT execution
 SELECT vehicule, date_heure_arrivee, date_heure_retour
 FROM v_historique_assignation
 WHERE DATE(date_heure_arrivee) = DATE '2026-03-11'

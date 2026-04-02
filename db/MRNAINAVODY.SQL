@@ -106,23 +106,23 @@ INSERT INTO lieu (code, libelle) VALUES
 -- Paramètres
 INSERT INTO parametre (cle, valeur, unite) VALUES
     ('TA', 30, 'minutes'),              -- Temps d'attente (non utilisé dans le calcul)
-    ('VITESSE_MOYENNE', 60, 'km/h');    -- Vitesse moyenne
+    ('VITESSE_MOYENNE', 50, 'km/h');    -- Vitesse moyenne
 
 --       Panorama (id=6) et Colbert (id=1) ont la meme distance (15 km)
 
 -- Distances depuis TNR (aeroport)
 INSERT INTO distance (from_id, to_id, kilometer) VALUES 
     ('TNR', '1', 90.0),
-    ('TNR', '2', 65.0),   -- TNR -> Novotel: 22.5 km
-    ('1', '2', 10.0);   -- TNR -> Ibis: 18 km
+    ('TNR', '2', 35.0),   -- TNR -> Novotel: 22.5 km
+    ('1', '2', 60.0);   -- TNR -> Ibis: 18 km
     
 -- Vehicules (tries par capacite et type carburant)
 INSERT INTO vehicule (reference, nombre_place, type_carburant, heure_disponibilite) VALUES
-    ('vehicule1', 10,  'D', '00:00:00'),
-    ('vehicule2', 8,  'D', '08:00:00'),
-    ('vehicule3', 8, 'ES',  '08:00:00'),
-    ('vehicule4', 12, 'ES',  '09:00:00');
-    -- ('vehicule5', 12, 'ES', '13:00:00');
+    ('vehicule1', 5,  'D', '09:00:00'),
+    ('vehicule2', 5,  'ES', '09:00:00'),
+    ('vehicule3', 12, 'D',  '00:00:00'),
+    ('vehicule4', 9, 'D',  '09:00:00'),
+    ('vehicule5', 12, 'ES', '13:00:00');
 
 
 -- =========================================
@@ -155,20 +155,20 @@ ORDER BY r.date_heure_arrivee;
 
 -- TEST 1: Regles de base (F1, F2, F3) - Diesel prefere
 INSERT INTO reservation (client, nombre_passager, date_heure_arrivee, id_hotel) VALUES
-    ('Client1', 20, '2026-04-02 06:00:00', 1);
+    ('Client1', 7, '2026-03-19 09:00:00', 1);
 
 INSERT INTO reservation (client, nombre_passager, date_heure_arrivee, id_hotel) VALUES
-    ('Client2', 6, '2026-04-02 08:15:00', 1);
+    ('Client2', 20, '2026-03-19 08:00:00', 2);
 
 INSERT INTO reservation (client, nombre_passager, date_heure_arrivee, id_hotel) VALUES
-    ('Client3', 10, '2026-04-02 09:00:00', 1);
+    ('Client3', 3, '2026-03-19 09:10:00', 1);
 
 INSERT INTO reservation (client, nombre_passager, date_heure_arrivee, id_hotel) VALUES
-    ('Client4', 6, '2026-04-02 09:10:00', 2);
+    ('Client4', 10, '2026-03-19 09:15:00', 1);
 
--- INSERT INTO reservation (client, nombre_passager, date_heure_arrivee, id_hotel) VALUES
---     ('Client5',5, '2026-03-19 09:20:00', 1);
+INSERT INTO reservation (client, nombre_passager, date_heure_arrivee, id_hotel) VALUES
+    ('Client5',5, '2026-03-19 09:20:00', 1);
 
--- INSERT INTO reservation (client, nombre_passager, date_heure_arrivee, id_hotel) VALUES
---     ('Client6', 12, '2026-03-19 13:30:00', 1);
+INSERT INTO reservation (client, nombre_passager, date_heure_arrivee, id_hotel) VALUES
+    ('Client6', 12, '2026-03-19 13:30:00', 1);
 
